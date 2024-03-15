@@ -133,13 +133,13 @@ classdef SmopClient < handle
         
         % Sends the recipe to SMOP.
         % Exceptions: network stream reading
-        function sendRecipe(obj, name, flows, isFinished, minRMSE, usv)
+        function sendRecipe(obj, name, flows, isFinished, rmse, usv)
           arguments
             obj
             name
             flows
             isFinished = false
-            minRMSE = 1e5
+            rmse = 1e5
             usv = 0
           end
         
@@ -156,7 +156,7 @@ classdef SmopClient < handle
               'content', struct( ...
                 'name', name, ...
                 'isFinal', isFinished, ...
-                'minRMSE', minRMSE, ...
+                'rmse', rmse, ...
                 'usv', usv, ...
                 'channels', channels ...
               ));

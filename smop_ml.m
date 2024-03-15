@@ -22,6 +22,9 @@
 % THIS VERSION uses full network message exchange protocol as explained in 
 % /TG-SMELLODI/General/Software/algorithm_Smellodi.docx
 %
+% IMPORTANT: Recipe name is parsed in the SMOP app, so do not change the
+% way it is constructed.
+%
 % Oleg Spakov, March 2024
 
 %%% App entry
@@ -130,10 +133,13 @@ function smop_ml(varargin)
     
     %% STEP 4a: Init vectors and 
     % All measured vectors (flow rates)
+    F = [minFlow maxFlow minFlow maxFlow (maxFlow + minFlow)/2;
+         minFlow minFlow maxFlow maxFlow (maxFlow + minFlow)/2];
+
     % Both flows set to maxFlow result in oversaturated PID, therefore 
-    %   the vector with both max flow is multiplied by 0.8.
-    F = [minFlow maxFlow minFlow .8*maxFlow (maxFlow + minFlow)/2;
-         minFlow minFlow maxFlow .8*maxFlow (maxFlow + minFlow)/2];
+    %   we apply some limitations as described in limitVectors.
+    F = limitVectors(F);
+    F = roundTo(F,args.dec);
 
     % Population size: set of np best vectors
     % Typically 10 times the dimension n of x, but 
@@ -141,6 +147,8 @@ function smop_ml(varargin)
     X = F;
     
     np = size(X,2);
+    
+    randDelta = 0.2*(maxFlow-minFlow);  % to be used in validation
 
     % Indexes of M corresponding to vectors consisting X
     p = nan(1,np);
@@ -166,28 +174,27 @@ function smop_ml(varargin)
 
     % overall minimum RMSE
     GM = 1e8;
+    cf = 1e5;   % minima
     
     fprintf('\nCollecting initial measurements:\n');
     for jj = 1:np
         pause(0.5);   % simply, to make ML being not too fast in SMOP interface
     
         recipeName = sprintf('Reference #%d', jj);
-        smopClient.sendRecipe(recipeName, F(:,jj), false, 1e5, usv);
+        smopClient.sendRecipe(recipeName, F(:,jj), false, cf, usv);
         fprintf('[%d] %s', jj, formatVector(gases, F, jj));
     
         dms = smopClient.waitForDms();
         M(jj).pos = dms.data.positive;
 
-        % this is needed only to dipslay the initial RMSEs and compute the
-        % initial global minima
         cf = sqrt(mean((posDP - dms.data.positive).^2));
         if (cf < GM)
             GM = cf;
             idGM = jj;
         end
-        fprintf(' RMSE=%.4f\n', cf);
+        fprintf(' RMSE=%6.3f\n', cf);
 
-        clear dms cf;
+        clear dms;
     end
 
     fprintf('GM: %.4f [%s]\n', GM, formatVector(gases, F, idGM));
@@ -195,7 +202,7 @@ function smop_ml(varargin)
     %% STEP 5: Iterative step
 
     iter = 1;       % iteration counter
-    minima = 1e5;   % 
+    cfm = cf;       % cf of measured trials only
     
     while (~isFinished)
         fprintf('\nIteration #%d:\n', iter);
@@ -206,10 +213,13 @@ function smop_ml(varargin)
         %% STEP 5a: Differential evolution
         % [https://en.wikipedia.org/wiki/Differential_evolution]
 
-        V = mutate(X, f, args.dec);
-        V = ensureWithin(V, minFlow, maxFlow);
-        U = crossover(X, V, cr);
-        U = validate(U, minFlow, maxFlow, args.dec);
+        V = mutate(X, f);                       % generate new vectors
+        V = limitValues(V, minFlow, maxFlow);   % limit values of new vectors
+        U = crossover(X, V, cr);                % mix old and new vectors
+        U = validate(U, randDelta);             % remove repetitions
+        U = limitValues(U, minFlow, maxFlow);   % limit values after randomization
+        U = limitVectors(U);                    % avoid oversaturation
+        U = roundTo(U, args.dec);               % round flow values
 
         fprintf('Flows to test:\n%s', formatVectorsAll(gases, U));
         
@@ -251,7 +261,7 @@ function smop_ml(varargin)
     
                 % this vector was not measured yet, so lets do it
                 recipeName = sprintf('Iteration #%d, Search #%d', iter, jj); 
-                smopClient.sendRecipe(recipeName, U(:,jj), isFinished, minima, usv);
+                smopClient.sendRecipe(recipeName, U(:,jj), isFinished, cfm, usv);
                 fprintf('[%d] MEASURE %s', jj, formatVector(gases, U, jj));
     
                 % wait for new DMS measurement and add it to the table of 
@@ -267,23 +277,28 @@ function smop_ml(varargin)
             end
     
             cf_U = sqrt(mean((posDP - tv).^2));
-            fprintf(' RMSE=%.4f', cf_U);
+            fprintf(' RMSE=%6.3f', cf_U);
+
+            if isempty(idMix)   % memorize cf of measured data to sent it with recipe
+                cfm = cf_U;
+            end
+
             clear idMix tv;
             
             %% STEP 5b3: update RMSE minima
 
-            minima = min(cf_U,cf_X);
+            cf = min(cf_U,cf_X);
 
             % storing global minima
-            if minima < GM
-                GM = minima;
+            if cf < GM
+                GM = cf;
                 idGM = idPair;
                 fprintf(' GM');
             end
 
             % storing local minima
-            % if minima < LM
-            %     LM = minima;
+            % if cf < LM
+            %     LM = cf;
             %     idLM = jj;
             % end
 
@@ -324,11 +339,12 @@ function smop_ml(varargin)
         if isFinished
             % send the final recipe
             flows = F(:,idGM);
-            smopClient.sendRecipe(recipeName, flows, isFinished, GM);
+            smopClient.sendRecipe(recipeName, flows, isFinished, cfm);
             fprintf('  %s, RMSE = %.4f\n\nFinished\n\n', ...
                 formatVector(gases, F, idGM), GM);
         else
-            fprintf('Continuing the search\n');
+            fprintf('Continuing the search, best vectors are:\n%s', ...
+                formatVectorsAll(gases, X));
         end
         
         iter = iter + 1;  % increase counter iterations by one
@@ -359,7 +375,7 @@ function idMix = getCommonIndices(V, U, index)
 end
 
 % Mutation
-function V = mutate(X, f, dec)
+function V = mutate(X, f)
     [n,np] = size(X);
     V = nan(n,np);
 
@@ -374,11 +390,6 @@ function V = mutate(X, f, dec)
         % QUESTION: Do they need to be from different concentration
         % combinations or could they be also from the same concentration
         value = X(:,ids(1)) + f * (X(:,ids(2)) - X(:,ids(3)));
-
-        % Rounding flow rates is necessary, otherwise there will be too 
-        % long search, as it is little chance to get both suggested flows 
-        % measured already.
-        value = roundTo(value, dec);
 
         V(:,jj) = value;
     end
@@ -409,15 +420,15 @@ function U = crossover(X, V, cr)
 end
 
 % Avoid the search algorithm to stuck with testing same or similar vectors
-function V = validate(V, min_, max_, dec)
+function V = validate(V, delta)
     [n,np] = size(V);
+    interval = [-delta, delta];
 
     % Replace repeated pairs with random pairs
     for jj = 2:np
         for kk = 1:(jj-1)
             if V(:,jj) == V(:,kk)
-                v = randi([min_, max_],2,1);
-                V(:,kk) = roundTo(v, dec);
+                V(:,kk) = V(:,kk) + randi(interval,n,1);
             end
         end
     end
@@ -433,33 +444,45 @@ function V = validate(V, min_, max_, dec)
     % ...then randomize those values a bit
     for kk = 1:n
         if allSame(kk)
-            d = 0.2 * (max_ - min_);
-            v = V(kk,:) + randi([-d, d],1,np);
-            V(kk,:) = roundTo(v, dec);
+            V(kk,:) = V(kk,:) + randi(interval,1,np);
         end
-    end
-
-    if any(allSame)
-        V = ensureWithin(V, min_, max_);
     end
 end
 
-% Ensures the values stay within bounds
-function V = ensureWithin(V, min_, max_)
+% Limits the values to stay within bounds
+function V = limitValues(V, min_, max_)
     V(V < min_) = min_;
     V(V > max_) = max_;
 end
 
-% Raounds values in the vector. If dec < 0, then rounds to even values.
-function v = roundTo(v, dec)
+% Avoids measurement sensor oversaturation by lmiting a combined gas flow
+function V = limitVectors(V)
+    [n,np] = size(V);
+    if (n == 2) % only for 2-dimensional vectors (2 gases)
+        % Limits (should this be defined in SMOP as gas properties? Say, as "criticalFlow")
+        limits = [55; 70];
+    
+        for jj = 1:np
+            a = atan2(V(2,jj), V(1,jj));
+            lf = [limits(1)*cos(a); limits(2)*sin(a)];
+            V(:,jj) = min(lf,V(:,jj));
+        end
+    end
+end
+
+% Raounds values in the vector. If dec < 0, then round value to be divisible by |dec|.
+function V = roundTo(V, dec)
     r = max(dec, 0);
-    v = round(v, r);
+    V = round(V, r);
 
     if dec < 0
+        [n,np] = size(V);
         % Lets round values to be even
-        for kk = 1:size(v)
-            if (mod(v(kk),2) == 1)
-                v(kk) = v(kk) - 1;
+        for kk = 1:n
+            for jj = 1:np
+                if (mod(V(kk,jj),2) == 1)
+                    V(kk,jj) = V(kk,jj) - 1;
+                end
             end
         end
     end

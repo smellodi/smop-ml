@@ -1,4 +1,6 @@
 function dict = argparser(args, n)
+    algorithms = ["euclidean"];
+
     dict = struct( ...
         "ip", "127.0.0.1", ...
         "cr", 0.7, ...
@@ -6,11 +8,9 @@ function dict = argparser(args, n)
         "dec", 0, ...
         "mi", 8, ...
         "th", 0.5, ...
-        "alg", "rmse", ...
+        "alg", algorithms(1), ...
         "usv", false ...
     );
-
-    algorithms = ["rmse"];
 
     fprintf('===============================\n');
     fprintf('SMOP Machine Learning back-end.\n');
@@ -27,7 +27,7 @@ function dict = argparser(args, n)
     fprintf('    mi [int]      max iteration count (default is %d)\n', dict.mi);
     fprintf('    th [double]   proximity threshold (default is %d)\n', dict.th);
     fprintf('    alg [str]     algorithm to use (default is %s)\n', dict.alg);
-    fprintf('                      Available values: %s\n', algorithms);
+    fprintf('                      Available values: [%s]\n', join(algorithms,", "));
     fprintf('    usv [bool]    flag to use single DMS separation voltage\n');
     fprintf('                      (default is %s, i.e. full scan)\n', string(dict.usv));
     fprintf('\n');
@@ -54,6 +54,8 @@ function dict = argparser(args, n)
                 dict.mi = str2double(p(2));
             elseif strcmpi(p(1), "th")
                 dict.th = str2double(p(2));
+            elseif strcmpi(p(1), "alg")
+                dict.th = p(2);
             elseif strcmpi(p(1), "usv")
                 dict.usv = strcmpi(p(2), 'true') || strcmp(p(2), "1");
             end
