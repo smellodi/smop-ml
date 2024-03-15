@@ -83,17 +83,18 @@ function smop_ml(varargin)
     %   alpha curve locations
     % - 'frobenius': Frobenius norm
     % - 'cos': Cosine similarity
-    % - 'stat': statistical tests on differences between generated and original odors?
+    % - 'stat': stat tests on diff between generated and original odors?
     % - what else could be tested by Naa???
     % THIS VERSION calculates RMSEs of differences between vector 
     % pairs as a measure of closeness to the initial dispersion plot. 
     % FOR NOW USE ONLY DMS DATA, no PID or SNT data used.
-    alg = smopClient.getAlgorithm(args.alg);
+
+    %alg = smopClient.getAlgorithm(args.alg);
     
-    % crossover probability CR: [0,1] (Wikipedia lists 0.9 as standard setting)
+    % crossover probability CR: [0,1] (Wikipedia lists 0.9 as standard)
     % - cr maintains diversity of population
-    % - for non-separable problems with correlated parameters cr in [0.5, 1] is
-    %   recommended
+    % - for non-separable problems with correlated parameters cr in [0.5, 1]
+    %   is recommended
     % - Mariaana used cr = 0.5 for n <= 3 and cr = 0.9 for n >= 4
     % - she pointed out that cr = 0.9 could have been used for any n (also
     cr = args.cr;
@@ -104,11 +105,20 @@ function smop_ml(varargin)
     f = args.f;
     
     % - DMS scan parameter
-    useSingleUsv = args.usv;
+    useSingleUsv = args.ssv;
 
-    fprintf('Gas parameters: n = %d, minFlow = %d, maxFlow = %d\n', ...
+    % Randomization offset. This is max offset applied to the originally 
+    % generated flow value if this flow does not pass the validation process
+    % (used in "validate" function)
+    randDelta = 0.2*(maxFlow-minFlow);
+
+    % Limits used to detect if the generated flow values may cause
+    % measurement sensor oversaturation. To be used in "limitVectors" function.
+    limits = smopClient.getCriticalFlow([55; 60]);
+
+    fprintf('Gas params: n = %d, minFlow = %d, maxFlow = %d\n', ...
         n, minFlow, maxFlow);
-    fprintf('Search parameters: mi = %d, limRMSE = %.2f cr = %.2f, f = %.2f\n', ...
+    fprintf('Search params: mi = %d, limRMSE = %.2f cr = %.2f, f = %.2f\n', ...
         mi, limRMSE, cr, f);
     
     %% STEP 3: Read in message with DMS measurement from target scent
@@ -131,14 +141,14 @@ function smop_ml(varargin)
     
     % Start without any prior information and measure np mixtures.
     
-    %% STEP 4a: Init vectors and 
+    %% STEP 4a: Init vectors and consts
     % All measured vectors (flow rates)
     F = [minFlow maxFlow minFlow maxFlow (maxFlow + minFlow)/2;
          minFlow minFlow maxFlow maxFlow (maxFlow + minFlow)/2];
 
     % Both flows set to maxFlow result in oversaturated PID, therefore 
     %   we apply some limitations as described in limitVectors.
-    F = limitVectors(F);
+    F = limitVectors(F,limits);
     F = roundTo(F,args.dec);
 
     % Population size: set of np best vectors
@@ -147,8 +157,6 @@ function smop_ml(varargin)
     X = F;
     
     np = size(X,2);
-    
-    randDelta = 0.2*(maxFlow-minFlow);  % to be used in validation
 
     % Indexes of M corresponding to vectors consisting X
     p = nan(1,np);
@@ -178,7 +186,7 @@ function smop_ml(varargin)
     
     fprintf('\nCollecting initial measurements:\n');
     for jj = 1:np
-        pause(0.5);   % simply, to make ML being not too fast in SMOP interface
+        pause(0.5); % simply, to make ML being not too fast in SMOP interface
     
         recipeName = sprintf('Reference #%d', jj);
         smopClient.sendRecipe(recipeName, F(:,jj), false, cf, usv);
@@ -217,8 +225,8 @@ function smop_ml(varargin)
         V = limitValues(V, minFlow, maxFlow);   % limit values of new vectors
         U = crossover(X, V, cr);                % mix old and new vectors
         U = validate(U, randDelta);             % remove repetitions
-        U = limitValues(U, minFlow, maxFlow);   % limit values after randomization
-        U = limitVectors(U);                    % avoid oversaturation
+        U = limitValues(U, minFlow, maxFlow);   % limit values after rndmzation
+        U = limitVectors(U, limits);            % avoid oversaturation
         U = roundTo(U, args.dec);               % round flow values
 
         fprintf('Flows to test:\n%s', formatVectorsAll(gases, U));
@@ -235,18 +243,18 @@ function smop_ml(varargin)
     
         for jj = 1:np
     
-            if isnan(p(jj))    % OLEG: seems that this is never true for the current X
+            if isnan(p(jj)) % OLEG: seems that this is never true
                 continue;
             end
     
-            %% STEP 5b1: RMSE of target scent and scent defined by TARGET vector
+            %% STEP 5b1: RMSE of TARGET vector
 
             tv = M(p(jj)).pos;
            
             cf_X = sqrt(mean((posDP - tv).^2));
             clear tv
 
-            %% STEP 5b2: RMSE of target scent and scent defined by TRIAL vector
+            %% STEP 5b2: RMSE of TRIAL vector
     
             % find shuffled intertersection of indexes for which F and U
             % have same flow rates
@@ -279,7 +287,7 @@ function smop_ml(varargin)
             cf_U = sqrt(mean((posDP - tv).^2));
             fprintf(' RMSE=%6.3f', cf_U);
 
-            if isempty(idMix)   % memorize cf of measured data to sent it with recipe
+            if isempty(idMix)   % memorize cf of measured data for recipe
                 cfm = cf_U;
             end
 
@@ -309,7 +317,7 @@ function smop_ml(varargin)
                 fprintf(' UM');
             end
     
-            %% STEP 5b4: replace target vector with trial vector if it yields lower RMSE
+            %% STEP 5b4: replace target vec with trial vec if it has lower RMSE
 
             if cf_U < cf_X
                 X(:,jj) = U(:,jj);
@@ -324,7 +332,7 @@ function smop_ml(varargin)
         fprintf('UM: %.4f [%s]\n', UM, formatVector(gases, U, idUM));
         fprintf('GM: %.4f [%s]\n', GM, formatVector(gases, F, idGM));
         
-        %% STEP 5c: Make a decision about the proximity of the best guess to the initial DMS
+        %% STEP 5c: Make a decision about the proximity of the best guess
     
         if (GM < limRMSE)
             isFinished = true;
@@ -412,8 +420,8 @@ function U = crossover(X, V, cr)
         for kk = 1:n
             if (rv2(kk,jj) <= cr) || (rv(jj) == kk)
                 U(kk,jj) = V(kk,jj);
-            else
-                U(kk,jj) = X(kk,jj);    % OLEG: extreamly rare if cr=0.8, but happens 1-3 times out of 10 when cr=0.5
+            else                        % OLEG: extreamly rare if cr=0.8, but
+                U(kk,jj) = X(kk,jj);    % happens in 10-30% cases when cr=0.5
             end
         end
     end
@@ -455,13 +463,14 @@ function V = limitValues(V, min_, max_)
     V(V > max_) = max_;
 end
 
-% Avoids measurement sensor oversaturation by lmiting a combined gas flow
-function V = limitVectors(V)
+% Avoids measurement sensor oversaturation by limiting a combined gas flow.
+% We assume that limirs are semi-axis (a,b) of an ellipse, and if the
+% vector lies outside of this ellipse, then it is "pulled" toward the
+% center to the ellipse edge.
+% NOTE: applied only for 2-dimensional vectors (2 gases)
+function V = limitVectors(V, limits)
     [n,np] = size(V);
-    if (n == 2) % only for 2-dimensional vectors (2 gases)
-        % Limits (should this be defined in SMOP as gas properties? Say, as "criticalFlow")
-        limits = [55; 70];
-    
+    if (n == 2)
         for jj = 1:np
             a = atan2(V(2,jj), V(1,jj));
             lf = [limits(1)*cos(a); limits(2)*sin(a)];
@@ -470,19 +479,19 @@ function V = limitVectors(V)
     end
 end
 
-% Raounds values in the vector. If dec < 0, then round value to be divisible by |dec|.
+% Rounds values in the vector.
+% If dec < 0, then round value to be divisible by |dec|.
 function V = roundTo(V, dec)
     r = max(dec, 0);
     V = round(V, r);
 
     if dec < 0
         [n,np] = size(V);
-        % Lets round values to be even
+        dec = abs(dec) + 1;
         for kk = 1:n
             for jj = 1:np
-                if (mod(V(kk,jj),2) == 1)
-                    V(kk,jj) = V(kk,jj) - 1;
-                end
+                r = mod(V(kk,jj),dec);
+                V(kk,jj) = V(kk,jj) - r;
             end
         end
     end
@@ -492,9 +501,10 @@ end
 % should be from [0:1] interval (0 corresponds to dms.setup.usv.min 
 % and 1 corresponds to dms.setup.usv.max)
 function [usv, posDP] = getDmsSingleLine(dms, linePosition)
-    % this is how we compute the Us line at a specific location in the full DMS scan:
+    % compute the Us line at a specific location in the full DMS scan:
     step = round(linePosition * dms.setup.usv.steps);
-    interval = (dms.setup.usv.max - dms.setup.usv.min) / (dms.setup.usv.steps - 1);
+    interval = (dms.setup.usv.max - dms.setup.usv.min) / ...
+        (dms.setup.usv.steps - 1);
     usv = dms.setup.usv.min + interval * (step - 1);
 
     start = dms.setup.ucv.steps * (step - 1);
@@ -514,7 +524,7 @@ function s = formatVector(names, V, index)
     end
 end
 
-% Formats gas names with a list of flows as "  GAS1    FLOW1   FLOW2 ...\n GAS2 ..."
+% Formats gas names with a list of flows as "  GAS1 FLOW1 FLOW2 ..\n GAS2 .."
 function s = formatVectorsAll(names, V)
     s = '';
     [n,np] = size(V);

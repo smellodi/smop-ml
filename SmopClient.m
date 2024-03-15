@@ -184,6 +184,23 @@ classdef SmopClient < handle
             end
         end
 
+        function criticalFlows = getCriticalFlow(obj, default)
+            criticalFlows = default;
+
+            if ~isstruct(obj.config)
+                return
+            end
+
+            channels = obj.config.printer.channels;
+            c = length(channels);
+            criticalFlows = zeros(c,1);
+            for jj = 1:c
+                if (isfield(channels(jj).props, 'criticalFlow'))
+                    criticalFlows(jj) = channels(jj).props.criticalFlow;
+                end
+            end
+        end
+
         function channelCount = getChannelCount(obj, default)
             if isstruct(obj.config)
                 channelCount = length(obj.config.printer.channels);
@@ -262,9 +279,22 @@ function content = getPacketContent(packet, type)
 end
 
 % Returns content of the config packet.
+% Note how we define some propertes right HERE!
+% (or should these properties be defined in SMOP?
 function config = toConfig(json)
   packet = jsondecode(json);
   config = getPacketContent(packet, 'config');
+
+  for jj = 1:length(config.printer.channels)
+      odor = config.printer.channels(jj).odor;
+      if (strcmpi(odor, "ipa"))
+          config.printer.channels(jj).props.criticalFlow = 55;
+      elseif (strcmpi(odor, "ethanol"))
+          config.printer.channels(jj).props.criticalFlow = 65;
+      elseif (strcmpi(odor, "nbutanol"))
+          config.printer.channels(jj).props.criticalFlow = 90;
+      end
+  end
 end
 
 % Returns content of a measurement packet, or 0 if this measurement source

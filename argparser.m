@@ -9,7 +9,7 @@ function dict = argparser(args, n)
         "mi", 8, ...
         "th", 0.5, ...
         "alg", algorithms(1), ...
-        "usv", false ...
+        "ssv", false ...
     );
 
     fprintf('===============================\n');
@@ -28,11 +28,11 @@ function dict = argparser(args, n)
     fprintf('    th [double]   proximity threshold (default is %d)\n', dict.th);
     fprintf('    alg [str]     algorithm to use (default is %s)\n', dict.alg);
     fprintf('                      Available values: [%s]\n', join(algorithms,", "));
-    fprintf('    usv [bool]    flag to use single DMS separation voltage\n');
-    fprintf('                      (default is %s, i.e. full scan)\n', string(dict.usv));
+    fprintf('    ssv [bool]    flag to use single DMS separation voltage\n');
+    fprintf('                      (default is %s, i.e. full scan)\n', string(dict.ssv));
     fprintf('\n');
     fprintf('  Example:\n');
-    fprintf('    smop_ml ip=127.0.0.1 f=0.6 usv=true\n');   
+    fprintf('    smop_ml ip=127.0.0.1 f=0.6 ssv=true\n');   
     fprintf('\n\n');
 
     for jj = 1:n
@@ -55,9 +55,9 @@ function dict = argparser(args, n)
             elseif strcmpi(p(1), "th")
                 dict.th = str2double(p(2));
             elseif strcmpi(p(1), "alg")
-                dict.th = p(2);
-            elseif strcmpi(p(1), "usv")
-                dict.usv = strcmpi(p(2), 'true') || strcmp(p(2), "1");
+                dict.alg = p(2);
+            elseif strcmpi(p(1), "ssv")
+                dict.ssv = strcmpi(p(2), 'true') || strcmp(p(2), "1");
             end
         catch ex
             fprintf("Failed to parse command-line argument '%s': %s", ...
