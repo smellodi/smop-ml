@@ -38,16 +38,17 @@ function smop_ml(varargin)
     %% STEP 1: Establish a connection to SMOP and get config parameters.
     
     % create a TCP client and connect to SMOP software
-    fprintf('Connecting to %s ...\n', args.ip);
+    fprintf('Connecting to %s ...', args.ip);
     smopClient = SmopClient(args.ip);
     
     % continue only if the connection is OK
     if ~smopClient.isConnected
+        fprintf('  Failed. Exiting...\n');
         pause(3);
         return;
     end
     
-    fprintf('Connected on port %d\n', smopClient.port);
+    fprintf('  Done, port = %d\n', smopClient.port);
     
     % continue only if config packet was received
     if ~smopClient.readConfig()
@@ -56,24 +57,16 @@ function smop_ml(varargin)
         return;
     end
     
-    gases = smopClient.gases;
+    %% STEP 2: Define parameters and varaibles.
     
-    %% STEP 2: Define parameters etc.
-    
-    % - switch for terminating iterative process
-    isFinished = false;
-    
-    % - number of chemicals in the mixture (concentration can be also 0 sccm)
-    n = smopClient.getChannelCount(2);
-    
-    % - minimum and maximum flows of chemicals in the mixture (in sccm)
+    % Minimum and maximum flows of chemicals in the mixture (in sccm)
     minFlow = 0;
     maxFlow = smopClient.getMaxFlow(50);
     
-    % - maximum number of iterations
-    mi = smopClient.getMaxIterationCount(args.mi);
+    % Maximum number of iterations
+    maxIter = smopClient.getMaxIterationCount(args.mi);
     
-    % - threshold RMSE for terminating iterative process
+    % RMSE threshold for terminating iterative process
     limRMSE = smopClient.getThreshold(args.th);
     
     % Define which distance measure to use. Options are:
@@ -91,7 +84,7 @@ function smop_ml(varargin)
 
     %alg = smopClient.getAlgorithm(args.alg);
     
-    % crossover probability CR: [0,1] (Wikipedia lists 0.9 as standard)
+    % Crossover probability CR: [0,1] (Wikipedia lists 0.9 as standard)
     % - cr maintains diversity of population
     % - for non-separable problems with correlated parameters cr in [0.5, 1]
     %   is recommended
@@ -103,8 +96,18 @@ function smop_ml(varargin)
     % - f controls differential variation and has most severe impact on
     %   performance of differential evolution algorithm
     f = args.f;
+
+    % Size of a vector (number of chemicals)
+    n = smopClient.getChannelCount(2);
     
-    % - DMS scan parameter
+    fprintf('Gas params: n = %d, minFlow = %d, maxFlow = %d\n', ...
+        n, minFlow, maxFlow);
+    fprintf('Search params: maxIter = %d, limRMSE = %.2f cr = %.2f, f = %.2f\n', ...
+        maxIter, limRMSE, cr, f);
+
+    % Other variables:
+
+    % DMS scan parameter
     useSingleUsv = args.ssv;
 
     % Randomization offset. This is max offset applied to the originally 
@@ -116,10 +119,11 @@ function smop_ml(varargin)
     % measurement sensor oversaturation. To be used in "limitVectors" function.
     limits = smopClient.getCriticalFlow([55; 60]);
 
-    fprintf('Gas params: n = %d, minFlow = %d, maxFlow = %d\n', ...
-        n, minFlow, maxFlow);
-    fprintf('Search params: mi = %d, limRMSE = %.2f cr = %.2f, f = %.2f\n', ...
-        mi, limRMSE, cr, f);
+    % Gas names and properties often used to print out info
+    gases = smopClient.gases;
+
+    % Switch for terminating iterative process
+    isFinished = false;
     
     %% STEP 3: Read in message with DMS measurement from target scent
     
@@ -143,8 +147,7 @@ function smop_ml(varargin)
     
     %% STEP 4a: Init vectors and consts
     % All measured vectors (flow rates)
-    F = [minFlow maxFlow minFlow maxFlow (maxFlow + minFlow)/2;
-         minFlow minFlow maxFlow maxFlow (maxFlow + minFlow)/2];
+    F = createInitialVectors(n, minFlow, maxFlow);
 
     % Both flows set to maxFlow result in oversaturated PID, therefore 
     %   we apply some limitations as described in limitVectors.
@@ -157,32 +160,14 @@ function smop_ml(varargin)
     X = F;
     
     np = size(X,2);
-
-    % Indexes of M corresponding to vectors consisting X
-    p = nan(1,np);
-
-    % following loop might be not necessary, but keep it here to allow 
-    % various combinations of flows in X that may come in future.
-    for jj = 1:np
-        % find shuffled intersection of indexes for which F and X
-        % have same flow rates
-        idMix = getCommonIndices(F, X, jj);
-        
-        % use DMS measurement related to first index for initial population
-        if ~isempty(idMix)
-            p(jj) = idMix(1);
-        end
-        clear idMix
-    end
     
     %% STEP 4b: Collect np measurements
 
     % All measurements
     M = arrayfun(@(x)struct('pos',1),1:np);
 
-    % overall minimum RMSE
-    GM = 1e8;
-    cf = 1e5;   % minima
+    gm = 1e8;   % overall minimum RMSE
+    cf = 1e8;   % last search RMSE
     
     fprintf('\nCollecting initial measurements:\n');
     for jj = 1:np
@@ -196,16 +181,16 @@ function smop_ml(varargin)
         M(jj).pos = dms.data.positive;
 
         cf = sqrt(mean((posDP - dms.data.positive).^2));
-        if (cf < GM)
-            GM = cf;
-            idGM = jj;
+        if (cf < gm)
+            gm = cf;
+            gm_i = jj;
         end
         fprintf(' RMSE=%6.3f\n', cf);
 
         clear dms;
     end
 
-    fprintf('GM: %.4f [%s]\n', GM, formatVector(gases, F, idGM));
+    fprintf('GM: %.4f [%s]\n', gm, formatVector(gases, F, gm_i));
     
     %% STEP 5: Iterative step
 
@@ -215,8 +200,8 @@ function smop_ml(varargin)
     while (~isFinished)
         fprintf('\nIteration #%d:\n', iter);
 
-        % LM = 1e8;   % minimum RMSE for vectors in X
-        UM = 1e8;   % minimum RMSE for vectors tested in this iteration
+        % lm = 1e8;   % minimum RMSE for vectors in X
+        um = 1e8;   % minimum RMSE for vectors tested in this iteration
     
         %% STEP 5a: Differential evolution
         % [https://en.wikipedia.org/wiki/Differential_evolution]
@@ -260,9 +245,9 @@ function smop_ml(varargin)
             % have same flow rates
             idMix = getCommonIndices(F, U, jj);
     
-            if ~isempty(idMix)              % measurement of this vector
-                idPair = idMix(1);          % exists already, lets 
-                tv = M(idPair).pos;      % take it from the database
+            if ~isempty(idMix)          % measurement of this vector
+                idPair = idMix(1);      % exists already, lets 
+                tv = M(idPair).pos;     % take it from the database
                 fprintf('[%d] REPEAT  %s', jj, formatVector(gases, F, idPair));
             else
                 pause(0.5);     % emulate some heavy ML search :)
@@ -297,23 +282,23 @@ function smop_ml(varargin)
 
             cf = min(cf_U,cf_X);
 
-            % storing global minima
-            if cf < GM
-                GM = cf;
-                idGM = idPair;
+            % global minima
+            if cf < gm
+                gm = cf;
+                gm_i = idPair;
                 fprintf(' GM');
             end
 
-            % storing local minima
-            % if cf < LM
-            %     LM = cf;
-            %     idLM = jj;
+            % local minima
+            % if cf < lm
+            %     lm = cf;
+            %     lm_i = jj;
             % end
 
             % minima of the tested vectors
-            if cf_U < UM
-                UM = cf_U;
-                idUM = jj;
+            if cf_U < um
+                um = cf_U;
+                um_i = jj;
                 fprintf(' UM');
             end
     
@@ -329,27 +314,27 @@ function smop_ml(varargin)
             clear cf_U cf_X;
         end
         
-        fprintf('UM: %.4f [%s]\n', UM, formatVector(gases, U, idUM));
-        fprintf('GM: %.4f [%s]\n', GM, formatVector(gases, F, idGM));
+        fprintf('UM: %.4f [%s]\n', um, formatVector(gases, U, um_i));
+        fprintf('GM: %.4f [%s]\n', gm, formatVector(gases, F, gm_i));
         
         %% STEP 5c: Make a decision about the proximity of the best guess
     
-        if (GM < limRMSE)
+        if (gm < limRMSE)
             isFinished = true;
             recipeName = 'Final recipe';
             fprintf('\n%s:\n', recipeName);
-        elseif (iter >= mi)
+        elseif (iter >= maxIter)
             isFinished = true;
-            recipeName = sprintf('Best after %d iterations', mi);
+            recipeName = sprintf('Best after %d iterations', maxIter);
             fprintf('\n%s:\n', recipeName);
         end
     
         if isFinished
             % send the final recipe
-            flows = F(:,idGM);
+            flows = F(:,gm_i);
             smopClient.sendRecipe(recipeName, flows, isFinished, cfm);
             fprintf('  %s, RMSE = %.4f\n\nFinished\n\n', ...
-                formatVector(gases, F, idGM), GM);
+                formatVector(gases, F, gm_i), gm);
         else
             fprintf('Continuing the search, best vectors are:\n%s', ...
                 formatVectorsAll(gases, X));
@@ -366,6 +351,23 @@ function smop_ml(varargin)
 end
 
 %%% FUNCTIONS
+
+% Creates initial vectors each of n size. The result includes all possible
+% combinations of min_ and max_, plus the vector with central values.
+function F = createInitialVectors(n, min_, max_)
+    V = [];
+    for jj = n:-1:0
+        a = repmat(min_,1,jj);
+        b = repmat(max_,1,n-jj);
+        U = [a b];
+        U = perms(U);
+        V = [V;U];
+    end
+    V = unique(V,"rows")';
+
+    center = (max_ + min_)/2;
+    F = [V repmat(center,n,1)];
+end
 
 % Finds common indices and returns a permutated array of them.
 % 'index' is the column to use from U matrix
