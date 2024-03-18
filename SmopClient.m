@@ -75,15 +75,17 @@ classdef SmopClient < handle
             isOk = true;
         end
 
-        % Return the initial DMS received with the config packet, or waits
-        % until it is received if there was not DMS packet received yet.
-        function dms = getInitialDms(obj)
-            if isstruct(obj.initialDMS) % if we have the initial DMS received
-                dms = obj.initialDMS;   % with the config packet, then lets
-                return;                 % return it immediately
+        % Return the initial measurement received with the config packet, or 
+        % waits until it is received if measurement packet wasn't received yet.
+        function measrm = getInitialMeasurement(obj)
+            if isstruct(obj.initialDMS)  % if we have the initial DMS received
+                measrm = struct( ...
+                    "dms", obj.initialDMS ... % with the config packet, then lets
+                );
+                return;                  % return it immediately
             end
 
-            dms = obj.waitForDms();     % otherwise lets read the stream again
+            measrm = obj.waitForMeasurement();   % otherwise lets read the stream again
         end
         
         % Reads the network stream, returns DMS, SNT and PID measurements if any.
@@ -118,9 +120,9 @@ classdef SmopClient < handle
           end
         end
         
-        % Does not return until a DMS measurement is received, all other
-        % measurements are ignored.
-        function dms = waitForDms(obj)
+        % Does not return until a measurement is received. 
+        % Currently, only DMS are are awaited.
+        function measrm = waitForMeasurement(obj)
           dms = 0;
           while ~isstruct(dms)
             try
@@ -129,6 +131,9 @@ classdef SmopClient < handle
                 fprintf('Failed to parse the packet: %s\n', ex.message);
             end
           end
+          measrm = struct( ...
+              "dms", dms ...
+          );
         end
         
         % Sends the recipe to SMOP.
@@ -179,7 +184,8 @@ classdef SmopClient < handle
             % We pretend that the max flow for all channels is same, so we
             % take the first channel's max flow value and return it.
             firstChannel = obj.config.printer.channels(1);
-            if isfield(firstChannel, 'props') && isfield(firstChannel.props, 'maxFlow')
+            if isfield(firstChannel, 'props') && ...
+               isfield(firstChannel.props, 'maxFlow')
                 maxFlow = str2double(firstChannel.props.maxFlow);
             end
         end
@@ -247,7 +253,8 @@ classdef SmopClient < handle
           while (isempty(dataBytes))
             pause(1);
             dataBytes = read(obj.socket);
-            dataBytes = dataBytes(find(dataBytes ~= 0, 1, 'first') : end); % removes leading zeros
+            % remove leading zeros
+            dataBytes = dataBytes(find(dataBytes ~= 0, 1, 'first') : end);
           end
           data = native2unicode(dataBytes);
         end
@@ -310,7 +317,8 @@ end
 
 %% NET Protocol
 
-% Copied here for convenience. Please refer the online document to keep it up-to-date
+% Copied here for convenience.
+% Please refer the online document to keep it up-to-date
 
 % { "type": "config",
 %   "content" : {
@@ -322,7 +330,8 @@ end
 %       "channels": [{   // an array of the device channels
 %         "id": int,	 // channel ID
 %         "odor": string, // name of the odor
-%         "props": {<string>: string}, // list of any properties, default is "props": { "maxflow": "50" }
+%         "props": {<string>: string}, // list of any properties, 
+%                                   default is "props": { "maxflow": "50" }
 %       }]
 %     }
 % } }

@@ -57,7 +57,7 @@ function smop_ml(varargin)
         return;
     end
     
-    %% STEP 2: Define parameters and varaibles.
+    %% STEP 2: Define parameters
     
     % Minimum and maximum flows of chemicals in the mixture (in sccm)
     minFlow = 0;
@@ -69,43 +69,16 @@ function smop_ml(varargin)
     % RMSE threshold for terminating iterative process
     limRMSE = smopClient.getThreshold(args.th);
     
-    % Define which distance measure to use. Options are:
-    % - 'euclidean': uses Euclidean distance between two matrices
-    % - 'alpha': extracts alpha curves or dispersion plots using Anton's
-    %   algorithm (ISOEN paper) and computes Euclidean distance between the
-    %   alpha curve locations
-    % - 'frobenius': Frobenius norm
-    % - 'cos': Cosine similarity
-    % - 'stat': stat tests on diff between generated and original odors?
-    % - what else could be tested by Naa???
-    % THIS VERSION calculates RMSEs of differences between vector 
-    % pairs as a measure of closeness to the initial dispersion plot. 
-    % FOR NOW USE ONLY DMS DATA, no PID or SNT data used.
-
-    %alg = smopClient.getAlgorithm(args.alg);
+    % Define which distance measure to use
+    alg = smopClient.getAlgorithm(args.alg);
     
-    % Crossover probability CR: [0,1] (Wikipedia lists 0.9 as standard)
-    % - cr maintains diversity of population
-    % - for non-separable problems with correlated parameters cr in [0.5, 1]
-    %   is recommended
-    % - Mariaana used cr = 0.5 for n <= 3 and cr = 0.9 for n >= 4
-    % - she pointed out that cr = 0.9 could have been used for any n (also
-    cr = args.cr;
-    
-    % differential weight f: [0,2] (Wikipedia lists 0.8 as standard setting)
-    % - f controls differential variation and has most severe impact on
-    %   performance of differential evolution algorithm
-    f = args.f;
-
     % Size of a vector (number of chemicals)
     n = smopClient.getChannelCount(2);
     
     fprintf('Gas params: n = %d, minFlow = %d, maxFlow = %d\n', ...
         n, minFlow, maxFlow);
     fprintf('Search params: maxIter = %d, limRMSE = %.2f cr = %.2f, f = %.2f\n', ...
-        maxIter, limRMSE, cr, f);
-
-    % Other variables:
+        maxIter, limRMSE, args.cr, args.f);
 
     % DMS scan parameter
     useSingleUsv = args.ssv;
@@ -122,24 +95,25 @@ function smop_ml(varargin)
     % Gas names and properties often used to print out info
     gases = smopClient.gases;
 
-    % Switch for terminating iterative process
-    isFinished = false;
-    
     %% STEP 3: Read in message with DMS measurement from target scent
     
-    dms = smopClient.getInitialDms();
+    initMeasrm = smopClient.getInitialMeasurement();
 
-    if useSingleUsv
-        [usv, posDP] = getDmsSingleLine(dms, 0.5);
-        fprintf('DMS scan parameters: Us = %.1f V\n', usv);
-    else   % use full DMS scan
-        usv = 0;
-        posDP = dms.data.positive;
-
-        fprintf('DMS scan parameters: full scan\n');
+    if isstruct(initMeasrm.dms)
+        if useSingleUsv
+            [usv, initDMS] = getDmsSingleLine(initMeasrm.dms, 0.5);
+            fprintf('DMS scan parameters: Us = %.1f V\n', usv);
+            initMeasrm.dms = initDMS;
+            clear initDMS;
+        else   % use full DMS scan
+            usv = 0;
+            initMeasrm.dms = initMeasrm.dms.data.positive;
+    
+            fprintf('DMS scan parameters: full scan\n');
+        end
+    else
+        initMeasrm.dms = [];
     end
-
-    clear dms;
 
     %% STEP 4: Initialization
     
@@ -164,7 +138,7 @@ function smop_ml(varargin)
     %% STEP 4b: Collect np measurements
 
     % All measurements
-    M = arrayfun(@(x)struct('pos',1),1:np);
+    M = arrayfun(@(x)struct('dms',1),1:np);
 
     gm = 1e8;   % overall minimum RMSE
     cf = 1e8;   % last search RMSE
@@ -177,17 +151,22 @@ function smop_ml(varargin)
         smopClient.sendRecipe(recipeName, F(:,jj), false, cf, usv);
         fprintf('[%d] %s', jj, formatVector(gases, F, jj));
     
-        dms = smopClient.waitForDms();
-        M(jj).pos = dms.data.positive;
+        measrm = smopClient.waitForMeasurement();
+        if isstruct(measrm.dms)
+            M(jj).dms = measrm.dms.data.positive;
+        end
 
-        cf = sqrt(mean((posDP - dms.data.positive).^2));
+        % THIS VERSION calculates RMSEs of differences between vector 
+        % pairs as a measure of closeness to the initial dispersion plot. 
+        % FOR NOW USE ONLY DMS DATA, no PID or SNT data used.
+        cf = getSimilarityMeasure(alg, initMeasrm, M(jj));
         if (cf < gm)
             gm = cf;
             gm_i = jj;
         end
         fprintf(' RMSE=%6.3f\n', cf);
 
-        clear dms;
+        clear measrm;
     end
 
     fprintf('GM: %.4f [%s]\n', gm, formatVector(gases, F, gm_i));
@@ -196,7 +175,10 @@ function smop_ml(varargin)
 
     iter = 1;       % iteration counter
     cfm = cf;       % cf of measured trials only
-    
+    p = 1:np;       % Indexes of M corresponding to vectors consisting X
+
+    isFinished = false;     % Switch for terminating iterative process
+
     while (~isFinished)
         fprintf('\nIteration #%d:\n', iter);
 
@@ -206,9 +188,9 @@ function smop_ml(varargin)
         %% STEP 5a: Differential evolution
         % [https://en.wikipedia.org/wiki/Differential_evolution]
 
-        V = mutate(X, f);                       % generate new vectors
+        V = mutate(X, args.f);                  % generate new vectors
         V = limitValues(V, minFlow, maxFlow);   % limit values of new vectors
-        U = crossover(X, V, cr);                % mix old and new vectors
+        U = crossover(X, V, args.cr);           % mix old and new vectors
         U = validate(U, randDelta);             % remove repetitions
         U = limitValues(U, minFlow, maxFlow);   % limit values after rndmzation
         U = limitVectors(U, limits);            % avoid oversaturation
@@ -234,10 +216,7 @@ function smop_ml(varargin)
     
             %% STEP 5b1: RMSE of TARGET vector
 
-            tv = M(p(jj)).pos;
-           
-            cf_X = sqrt(mean((posDP - tv).^2));
-            clear tv
+            cf_X = getSimilarityMeasure(alg, initMeasrm, M(p(jj)));
 
             %% STEP 5b2: RMSE of TRIAL vector
     
@@ -247,7 +226,7 @@ function smop_ml(varargin)
     
             if ~isempty(idMix)          % measurement of this vector
                 idPair = idMix(1);      % exists already, lets 
-                tv = M(idPair).pos;     % take it from the database
+                m_i = idPair;           % take it from the database
                 fprintf('[%d] REPEAT  %s', jj, formatVector(gases, F, idPair));
             else
                 pause(0.5);     % emulate some heavy ML search :)
@@ -259,24 +238,26 @@ function smop_ml(varargin)
     
                 % wait for new DMS measurement and add it to the table of 
                 % measured recipes
-                dms = smopClient.waitForDms();
-                M(end + 1).pos = dms.data.positive;
+                newMeasrm = smopClient.waitForMeasurement();
+                if isstruct(newMeasrm.dms)
+                    M(end + 1).dms = newMeasrm.dms.data.positive;
+                end
+                clear newMeasrm;
     
                 F = [F U(:,jj)];
                 idPair = size(F,2);
     
-                tv = dms.data.positive;
-                clear dms;
+                m_i = length(M);
             end
     
-            cf_U = sqrt(mean((posDP - tv).^2));
+            cf_U = getSimilarityMeasure(alg, initMeasrm, M(m_i));
             fprintf(' RMSE=%6.3f', cf_U);
 
             if isempty(idMix)   % memorize cf of measured data for recipe
                 cfm = cf_U;
             end
 
-            clear idMix tv;
+            clear idMix;
             
             %% STEP 5b3: update RMSE minima
 
@@ -306,7 +287,7 @@ function smop_ml(varargin)
 
             if cf_U < cf_X
                 X(:,jj) = U(:,jj);
-                fprintf(' p(%d)= %d >> %d', jj, p(jj), idPair);
+                fprintf(' [%d >> %d]', p(jj), idPair);
                 p(jj) = idPair;
             end
     
@@ -357,16 +338,16 @@ end
 function F = createInitialVectors(n, min_, max_)
     V = [];
     for jj = n:-1:0
-        a = repmat(min_,1,jj);
-        b = repmat(max_,1,n-jj);
-        U = [a b];
-        U = perms(U);
-        V = [V;U];
+        a = repmat(min_,1,jj);      % [0, 0, ...   - no such values for jj=0
+        b = repmat(max_,1,n-jj);    % ... 50, 50]  - nu such values for jj=n
+        U = [a b];                  % unite both parts
+        U = perms(U);               % save all permutations as rows
+        V = [V;U];                  % add to the resulting list
     end
-    V = unique(V,"rows")';
-
+    V = unique(V,"rows")';          % remove duplications produced by
+                                    % permutations, and transpose the matrix
     center = (max_ + min_)/2;
-    F = [V repmat(center,n,1)];
+    F = [V repmat(center,n,1)];     % add central point
 end
 
 % Finds common indices and returns a permutated array of them.
@@ -382,6 +363,16 @@ function idMix = getCommonIndices(V, U, index)
     % NOTE: some vectors might be missing from the data
     idMix = intersect(idGas1,idGas2);
     idMix = idMix(randperm(numel(idMix)));
+end
+
+% computed RMSE
+function rmse = getSimilarityMeasure(alg, measrm1, measrm2)
+    rmse = 1e8;
+    if (alg == "euclidean")
+        if (isfield(measrm2,"dms"))
+            rmse = sqrt(mean((measrm1.dms - measrm2.dms).^2));
+        end
+    end
 end
 
 % Mutation
@@ -466,10 +457,10 @@ function V = limitValues(V, min_, max_)
 end
 
 % Avoids measurement sensor oversaturation by limiting a combined gas flow.
-% We assume that limirs are semi-axis (a,b) of an ellipse, and if the
+% We assume that limits are semi-axis (a,b) of an ellipse, and if the
 % vector lies outside of this ellipse, then it is "pulled" toward the
 % center to the ellipse edge.
-% NOTE: applied only for 2-dimensional vectors (2 gases)
+% NOTE: will be applied only for 2-dimensional vectors (2 gases)
 function V = limitVectors(V, limits)
     [n,np] = size(V);
     if (n == 2)
@@ -492,8 +483,8 @@ function V = roundTo(V, dec)
         dec = abs(dec) + 1;
         for kk = 1:n
             for jj = 1:np
-                r = mod(V(kk,jj),dec);
-                V(kk,jj) = V(kk,jj) - r;
+                r = round(V(kk,jj)/dec);
+                V(kk,jj) = dec * r;
             end
         end
     end
@@ -502,7 +493,7 @@ end
 % Computes the separation voltage (usv) closest to the linePosition that
 % should be from [0:1] interval (0 corresponds to dms.setup.usv.min 
 % and 1 corresponds to dms.setup.usv.max)
-function [usv, posDP] = getDmsSingleLine(dms, linePosition)
+function [usv, data] = getDmsSingleLine(dms, linePosition)
     % compute the Us line at a specific location in the full DMS scan:
     step = round(linePosition * dms.setup.usv.steps);
     interval = (dms.setup.usv.max - dms.setup.usv.min) / ...
@@ -511,7 +502,7 @@ function [usv, posDP] = getDmsSingleLine(dms, linePosition)
 
     start = dms.setup.ucv.steps * (step - 1);
     end_ = start + dms.setup.ucv.steps;
-    posDP = dms.data.positive(start+1:end_);
+    data = dms.data.positive(start+1:end_);
 end
 
 % Formats gas names with their flows as "GAS1=FLOW1 GAS2=FLOW2 ..."
