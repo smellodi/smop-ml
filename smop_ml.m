@@ -95,6 +95,9 @@ function smop_ml(varargin)
     % Gas names and properties often used to print out info
     gases = smopClient.gases;
 
+    % Separation voltage used in DMS scope mode 
+    usv = 0;
+
     %% STEP 3: Read in message with DMS measurement from target scent
     
     initMeasrm = smopClient.getInitialMeasurement();
@@ -113,6 +116,12 @@ function smop_ml(varargin)
         end
     else
         initMeasrm.dms = [];
+    end
+
+    if isstruct(initMeasrm.snt)
+        initMeasrm.snt = initMeasrm.snt.data.resistances;
+    else
+        initMeasrm.snt = [];
     end
 
     %% STEP 4: Initialization
@@ -138,7 +147,7 @@ function smop_ml(varargin)
     %% STEP 4b: Collect np measurements
 
     % All measurements
-    M = arrayfun(@(x)struct('dms',1),1:np);
+    M = arrayfun(@(x)struct('dms',0,'snt',0),1:np);
 
     gm = 1e8;   % overall minimum RMSE
     cf = 1e8;   % last search RMSE
@@ -154,6 +163,13 @@ function smop_ml(varargin)
         measrm = smopClient.waitForMeasurement();
         if isstruct(measrm.dms)
             M(jj).dms = measrm.dms.data.positive;
+        else
+            M(jj).dms = [];
+        end
+        if isstruct(measrm.snt)
+            M(jj).snt = measrm.snt.data.resistances;
+        else
+            M(jj).snt = [];
         end
 
         % THIS VERSION calculates RMSEs of differences between vector 
@@ -239,15 +255,22 @@ function smop_ml(varargin)
                 % wait for new DMS measurement and add it to the table of 
                 % measured recipes
                 newMeasrm = smopClient.waitForMeasurement();
+                m_i = length(M) + 1;
                 if isstruct(newMeasrm.dms)
-                    M(end + 1).dms = newMeasrm.dms.data.positive;
+                    M(m_i).dms = newMeasrm.dms.data.positive;
+                else
+                    M(m_i).dms = [];
                 end
+                if isstruct(newMeasrm.snt)
+                    M(m_i).snt = newMeasrm.snt.data.resistances;
+                else
+                    M(m_i).snt = [];
+                end
+
                 clear newMeasrm;
     
                 F = [F U(:,jj)];
                 idPair = size(F,2);
-    
-                m_i = length(M);
             end
     
             cf_U = getSimilarityMeasure(alg, initMeasrm, M(m_i));
@@ -369,8 +392,10 @@ end
 function rmse = getSimilarityMeasure(alg, measrm1, measrm2)
     rmse = 1e8;
     if (alg == "euclidean")
-        if (isfield(measrm2,"dms"))
+        if ~isempty(measrm2.dms)
             rmse = sqrt(mean((measrm1.dms - measrm2.dms).^2));
+        elseif ~isempty(measrm2.snt)
+            rmse = sqrt(mean((measrm1.snt - measrm2.snt).^2));
         end
     end
 end

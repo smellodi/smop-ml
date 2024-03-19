@@ -7,6 +7,7 @@ classdef SmopClient < handle
         isConnected = false
         config = 0
         initialDMS = 0
+        initialSNT = 0
         ip
         port
         gases
@@ -62,13 +63,21 @@ classdef SmopClient < handle
                 return;
             end
           
-            % Lets check if the initial DMS was already received
+            % Lets check if the initial measurement was already received
             if (length(lines) > 1) && (~isempty(trim(lines{2})))
                 % yes it was, lets memorize it
+                mline = trim(lines{2});
+
                 try
-                    obj.initialDMS = toMeasurement(trim(lines{2}), 'dms');
+                    obj.initialDMS = toMeasurement(mline, 'dms');
                 catch ex
                     fprintf('Failed to parse the initial DMS: %s\n', ex.message);
+                end
+
+                try
+                    obj.initialSNT = toMeasurement(mline, 'snt');
+                catch ex
+                    fprintf('Failed to parse the initial SNT: %s\n', ex.message);
                 end
             end
 
@@ -78,11 +87,19 @@ classdef SmopClient < handle
         % Return the initial measurement received with the config packet, or 
         % waits until it is received if measurement packet wasn't received yet.
         function measrm = getInitialMeasurement(obj)
+            measrm = struct( ...
+                "dms", 0, ...
+                "snt", 0 ...
+            );
+
             if isstruct(obj.initialDMS)  % if we have the initial DMS received
-                measrm = struct( ...
-                    "dms", obj.initialDMS ... % with the config packet, then lets
-                );
-                return;                  % return it immediately
+                measrm.dms = obj.initialDMS; % with the config packet, then 
+                return;                  % lets return it immediately
+            end
+
+            if isstruct(obj.initialSNT)  % if we have the initial SNT received
+                measrm.snt = obj.initialSNT; % with the config packet, then 
+                return;                  % lets return it immediately
             end
 
             measrm = obj.waitForMeasurement();   % otherwise lets read the stream again
@@ -108,13 +125,13 @@ classdef SmopClient < handle
         
                 snt = toMeasurement(line, 'snt');
                 if (isstruct(snt))
-                    snts = [snts snt.data];
+                    snts = [snts snt];
                     continue;
                 end
         
                 pid = toMeasurement(line, 'pid');
                 if (isstruct(pid))
-                    pids = [pids pid.data];
+                    pids = [pids pid];
                 end
             end
           end
@@ -124,15 +141,22 @@ classdef SmopClient < handle
         % Currently, only DMS are are awaited.
         function measrm = waitForMeasurement(obj)
           dms = 0;
-          while ~isstruct(dms)
+          snt = 0;
+
+          while ~isstruct(dms) && ~isstruct(snt)
             try
-                [dms, ~, ~] = obj.readData();
+                [dms, snts, ~] = obj.readData();
+                if ~isempty(snts)
+                    snt = snts(1);
+                end
             catch ex
                 fprintf('Failed to parse the packet: %s\n', ex.message);
             end
           end
+
           measrm = struct( ...
-              "dms", dms ...
+              "dms", dms, ...
+              "snt", snt ...
           );
         end
         
