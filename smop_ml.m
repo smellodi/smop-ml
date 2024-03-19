@@ -1,9 +1,5 @@
 %% NOTES
 
-% TODO:
-% - ensure each generated flow pair does not oversaturate DMS or PID
-% - apply generated flow rounding also after extra randomization
-
 % TIMO SUGGEST TO USE FLOW RATES OF 20 OR HIGHER FOR TARGET SCENT TO SPEED
 % UP RESPSONSE TIME/SHORTEN STABILIZATION TIME
 % USE LOWER RESOLUTION --> MEASURE ONLY REGIONS WITH ALPHA CURVES FROM
@@ -30,7 +26,7 @@
 %%% App entry
 
 function smop_ml(varargin)
-    args = argparser(varargin, nargin);
+    args = argparser(varargin,nargin);
 
     % dbstop error
     % rng("shuffle")
@@ -77,26 +73,29 @@ function smop_ml(varargin)
     
     fprintf('Gas params: n = %d, minFlow = %d, maxFlow = %d\n', ...
         n, minFlow, maxFlow);
-    fprintf('Search params: maxIter = %d, limRMSE = %.2f cr = %.2f, f = %.2f\n', ...
-        maxIter, limRMSE, args.cr, args.f);
+    fprintf('Alg params: name = %s, cr = %.2f, f = %.2f\n', ...
+        alg, args.cr, args.f);
+    fprintf('Search params: maxIter = %d, limRMSE = %.2f\n', ...
+        maxIter, limRMSE);
 
     % DMS scan parameter
     useSingleUsv = args.ssv;
 
+    % Separation voltage used in DMS scope mode (i.e. useSingleUsv == 1)
+    usv = 0;
+
     % Randomization offset. This is max offset applied to the originally 
     % generated flow value if this flow does not pass the validation process
     % (used in "validate" function)
-    randDelta = 0.2*(maxFlow-minFlow);
+    randDelta = 0.2 * (maxFlow - minFlow);
 
     % Limits used to detect if the generated flow values may cause
-    % measurement sensor oversaturation. To be used in "limitVectors" function.
+    % measurement sensor oversaturation.
+    % To be used in "limitVectors" function.
     limits = smopClient.getCriticalFlow([55; 60]);
 
     % Gas names and properties often used to print out info
     gases = smopClient.gases;
-
-    % Separation voltage used in DMS scope mode 
-    usv = 0;
 
     %% STEP 3: Read in message with DMS measurement from target scent
     
@@ -104,7 +103,7 @@ function smop_ml(varargin)
 
     if isstruct(initMeasrm.dms)
         if useSingleUsv
-            [usv, initDMS] = getDmsSingleLine(initMeasrm.dms, 0.5);
+            [usv, initDMS] = getDmsSingleLine(initMeasrm.dms,0.5);
             fprintf('DMS scan parameters: Us = %.1f V\n', usv);
             initMeasrm.dms = initDMS;
             clear initDMS;
@@ -130,7 +129,7 @@ function smop_ml(varargin)
     
     %% STEP 4a: Init vectors and consts
     % All measured vectors (flow rates)
-    F = createInitialVectors(n, minFlow, maxFlow);
+    F = createInitialVectors(n,minFlow,maxFlow);
 
     % Both flows set to maxFlow result in oversaturated PID, therefore 
     %   we apply some limitations as described in limitVectors.
@@ -157,8 +156,8 @@ function smop_ml(varargin)
         pause(0.5); % simply, to make ML being not too fast in SMOP interface
     
         recipeName = sprintf('Reference #%d', jj);
-        smopClient.sendRecipe(recipeName, F(:,jj), false, cf, usv);
-        fprintf('[%d] %s', jj, formatVector(gases, F, jj));
+        smopClient.sendRecipe(recipeName,F(:,jj),false,cf,usv);
+        fprintf('[%d] %s', jj, formatVector(gases,F,jj));
     
         measrm = smopClient.waitForMeasurement();
         if isstruct(measrm.dms)
@@ -175,7 +174,7 @@ function smop_ml(varargin)
         % THIS VERSION calculates RMSEs of differences between vector 
         % pairs as a measure of closeness to the initial dispersion plot. 
         % FOR NOW USE ONLY DMS DATA, no PID or SNT data used.
-        cf = getSimilarityMeasure(alg, initMeasrm, M(jj));
+        cf = getSimilarityMeasure(alg,initMeasrm,M(jj));
         if (cf < gm)
             gm = cf;
             gm_i = jj;
@@ -185,7 +184,7 @@ function smop_ml(varargin)
         clear measrm;
     end
 
-    fprintf('GM: %.4f [%s]\n', gm, formatVector(gases, F, gm_i));
+    fprintf('GM: %.4f [%s]\n', gm, formatVector(gases,F,gm_i));
     
     %% STEP 5: Iterative step
 
@@ -204,15 +203,15 @@ function smop_ml(varargin)
         %% STEP 5a: Differential evolution
         % [https://en.wikipedia.org/wiki/Differential_evolution]
 
-        V = mutate(X, args.f);                  % generate new vectors
-        V = limitValues(V, minFlow, maxFlow);   % limit values of new vectors
-        U = crossover(X, V, args.cr);           % mix old and new vectors
-        U = validate(U, randDelta);             % remove repetitions
-        U = limitValues(U, minFlow, maxFlow);   % limit values after rndmzation
-        U = limitVectors(U, limits);            % avoid oversaturation
-        U = roundTo(U, args.dec);               % round flow values
+        V = mutate(X,args.f);               % generate new vectors
+        V = limitValues(V,minFlow,maxFlow); % limit values of new vectors
+        U = crossover(X,V,args.cr);         % mix old and new vectors
+        U = validate(U,randDelta);          % remove repetitions
+        U = limitValues(U,minFlow,maxFlow); % limit values after rndmzation
+        U = limitVectors(U,limits);         % avoid oversaturation
+        U = roundTo(U,args.dec);            % round flow values
 
-        fprintf('Flows to test:\n%s', formatVectorsAll(gases, U));
+        fprintf('Flows to test:\n%s', formatVectorsAll(gases,U));
         
         %% STEP 5b: Selectiing better vectors
 
@@ -232,35 +231,37 @@ function smop_ml(varargin)
     
             %% STEP 5b1: RMSE of TARGET vector
 
-            cf_X = getSimilarityMeasure(alg, initMeasrm, M(p(jj)));
+            cf_X = getSimilarityMeasure(alg,initMeasrm,M(p(jj)));
 
             %% STEP 5b2: RMSE of TRIAL vector
     
             % find shuffled intertersection of indexes for which F and U
             % have same flow rates
-            idMix = getCommonIndices(F, U, jj);
+            idMix = getCommonIndices(F,U,jj);
     
             if ~isempty(idMix)          % measurement of this vector
                 idPair = idMix(1);      % exists already, lets 
                 m_i = idPair;           % take it from the database
-                fprintf('[%d] REPEAT  %s', jj, formatVector(gases, F, idPair));
+                fprintf('[%d] REPEAT  %s', jj, formatVector(gases,F,idPair));
             else
                 pause(0.5);     % emulate some heavy ML search :)
     
                 % this vector was not measured yet, so lets do it
                 recipeName = sprintf('Iteration #%d, Search #%d', iter, jj); 
-                smopClient.sendRecipe(recipeName, U(:,jj), isFinished, cfm, usv);
-                fprintf('[%d] MEASURE %s', jj, formatVector(gases, U, jj));
+                smopClient.sendRecipe(recipeName,U(:,jj),isFinished,cfm,usv);
+                fprintf('[%d] MEASURE %s', jj, formatVector(gases,U,jj));
     
                 % wait for new DMS measurement and add it to the table of 
                 % measured recipes
                 newMeasrm = smopClient.waitForMeasurement();
                 m_i = length(M) + 1;
+
                 if isstruct(newMeasrm.dms)
                     M(m_i).dms = newMeasrm.dms.data.positive;
                 else
                     M(m_i).dms = [];
                 end
+
                 if isstruct(newMeasrm.snt)
                     M(m_i).snt = newMeasrm.snt.data.resistances;
                 else
@@ -273,7 +274,7 @@ function smop_ml(varargin)
                 idPair = size(F,2);
             end
     
-            cf_U = getSimilarityMeasure(alg, initMeasrm, M(m_i));
+            cf_U = getSimilarityMeasure(alg,initMeasrm,M(m_i));
             fprintf(' RMSE=%6.3f', cf_U);
 
             if isempty(idMix)   % memorize cf of measured data for recipe
@@ -318,8 +319,8 @@ function smop_ml(varargin)
             clear cf_U cf_X;
         end
         
-        fprintf('UM: %.4f [%s]\n', um, formatVector(gases, U, um_i));
-        fprintf('GM: %.4f [%s]\n', gm, formatVector(gases, F, gm_i));
+        fprintf('UM: %.4f [%s]\n', um, formatVector(gases,U,um_i));
+        fprintf('GM: %.4f [%s]\n', gm, formatVector(gases,F,gm_i));
         
         %% STEP 5c: Make a decision about the proximity of the best guess
     
@@ -338,10 +339,10 @@ function smop_ml(varargin)
             flows = F(:,gm_i);
             smopClient.sendRecipe(recipeName, flows, isFinished, cfm);
             fprintf('  %s, RMSE = %.4f\n\nFinished\n\n', ...
-                formatVector(gases, F, gm_i), gm);
+                formatVector(gases,F,gm_i), gm);
         else
             fprintf('Continuing the search, best vectors are:\n%s', ...
-                formatVectorsAll(gases, X));
+                formatVectorsAll(gases,X));
         end
         
         iter = iter + 1;  % increase counter iterations by one
@@ -369,18 +370,17 @@ function F = createInitialVectors(n, min_, max_)
     end
     V = unique(V,"rows")';          % remove duplications produced by
                                     % permutations, and transpose the matrix
-    center = (max_ + min_)/2;
+    center = (max_ + min_) / 2;
     F = [V repmat(center,n,1)];     % add central point
 end
 
 % Finds common indices and returns a permutated array of them.
-% 'index' is the column to use from U matrix
-function idMix = getCommonIndices(V, U, index)
+function idMix = getCommonIndices(V, U, u_col)
     % find samples for which V and U have same flow rate for ..
     % .. isopropanol and ..
-    idGas1 = find(V(1,:) == U(1,index));
+    idGas1 = find(V(1,:) == U(1,u_col));
     % .. ethanol or n-Butanol
-    idGas2 = find(V(2,:) == U(2,index));
+    idGas2 = find(V(2,:) == U(2,u_col));
     
     % get intersection and shuffle it in random order
     % NOTE: some vectors might be missing from the data
@@ -490,8 +490,8 @@ function V = limitVectors(V, limits)
     [n,np] = size(V);
     if (n == 2)
         for jj = 1:np
-            a = atan2(V(2,jj), V(1,jj));
-            lf = [limits(1)*cos(a); limits(2)*sin(a)];
+            a = atan2(V(2,jj),V(1,jj));
+            lf = [limits(1) * cos(a); limits(2) * sin(a)];
             V(:,jj) = min(lf,V(:,jj));
         end
     end
@@ -500,15 +500,15 @@ end
 % Rounds values in the vector.
 % If dec < 0, then round value to be divisible by |dec|.
 function V = roundTo(V, dec)
-    r = max(dec, 0);
-    V = round(V, r);
+    r = max(dec,0);
+    V = round(V,r);
 
     if dec < 0
         [n,np] = size(V);
         dec = abs(dec) + 1;
         for kk = 1:n
             for jj = 1:np
-                r = round(V(kk,jj)/dec);
+                r = round(V(kk,jj) / dec);
                 V(kk,jj) = dec * r;
             end
         end
@@ -531,14 +531,13 @@ function [usv, data] = getDmsSingleLine(dms, linePosition)
 end
 
 % Formats gas names with their flows as "GAS1=FLOW1 GAS2=FLOW2 ..."
-function s = formatVector(names, V, index)
+function s = formatVector(names, V, v_col)
     s = '';
-    c = size(V,1);
-    for ii = 1:c
+    for ii = 1:size(V,1)
         if ii ~= 1
             s = sprintf('%s ', s);
         end
-        s = sprintf('%s%s=%4.1f', s, names(ii), V(ii, index));
+        s = sprintf('%s%s=%4.1f', s, names(ii), V(ii,v_col));
     end
 end
 
