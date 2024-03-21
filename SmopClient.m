@@ -21,7 +21,7 @@ classdef SmopClient < handle
         % Constructor
         function obj = SmopClient(ip, port)
             arguments
-                ip = '127.0.0.1'
+                ip = "127.0.0.1"
                 port = 2339
             end
 
@@ -32,13 +32,13 @@ classdef SmopClient < handle
                 obj.socket = tcpclient(ip, port, "Timeout", 3);
                 obj.isConnected = true;
             catch ex
-                fprintf('Cannot connect to %s:%d >> %s\n', ip, port, ex.message);
+                fprintf("Cannot connect to %s:%d >> %s\n", ip, port, ex.message);
             end
         end
         
         % Reads config packet and, possibly, the initial DMS packet that may arrive
-        % together with the config packet. Returns 'true' if the config received,
-        % 'false' otherwise
+        % together with the config packet. Returns "true" if the config received,
+        % "false" otherwise
         % Exceptions: network stream reading
         function isOk = readConfig(obj)
             isOk = false;
@@ -59,7 +59,7 @@ classdef SmopClient < handle
                     obj.gases(ii) = obj.config.printer.channels(ii).odor;
                 end
             catch ex
-                fprintf('Failed to parse config: %s\n', ex.message);
+                fprintf("Failed to parse config: %s\n", ex.message);
                 return;
             end
           
@@ -69,15 +69,15 @@ classdef SmopClient < handle
                 mline = trim(lines{2});
 
                 try
-                    obj.initialDMS = toMeasurement(mline, 'dms');
+                    obj.initialDMS = toMeasurement(mline, "dms");
                 catch ex
-                    fprintf('Failed to parse the initial DMS: %s\n', ex.message);
+                    fprintf("Failed to parse the initial DMS: %s\n", ex.message);
                 end
 
                 try
-                    obj.initialSNT = toMeasurement(mline, 'snt');
+                    obj.initialSNT = toMeasurement(mline, "snt");
                 catch ex
-                    fprintf('Failed to parse the initial SNT: %s\n', ex.message);
+                    fprintf("Failed to parse the initial SNT: %s\n", ex.message);
                 end
             end
 
@@ -118,18 +118,18 @@ classdef SmopClient < handle
           for i = 1:length(lines)
             line = trim(lines{i});
             if ~isempty(line)
-                dms = toMeasurement(line, 'dms');
+                dms = toMeasurement(line, "dms");
                 if isstruct(dms)
                     continue;
                 end
         
-                snt = toMeasurement(line, 'snt');
+                snt = toMeasurement(line, "snt");
                 if (isstruct(snt))
                     snts = [snts snt];
                     continue;
                 end
         
-                pid = toMeasurement(line, 'pid');
+                pid = toMeasurement(line, "pid");
                 if (isstruct(pid))
                     pids = [pids pid];
                 end
@@ -150,7 +150,7 @@ classdef SmopClient < handle
                     snt = snts(1);
                 end
             catch ex
-                fprintf('Failed to parse the packet: %s\n', ex.message);
+                fprintf("Failed to parse the packet: %s\n", ex.message);
             end
           end
 
@@ -181,13 +181,13 @@ classdef SmopClient < handle
           end
         
           recipe = struct( ...
-              'type', 'recipe', ...
-              'content', struct( ...
-                'name', name, ...
-                'isFinal', isFinished, ...
-                'rmse', rmse, ...
-                'usv', usv, ...
-                'channels', channels ...
+              "type", "recipe", ...
+              "content", struct( ...
+                "name", name, ...
+                "isFinal", isFinished, ...
+                "rmse", rmse, ...
+                "usv", usv, ...
+                "channels", channels ...
               ));
         
           json = jsonencode(recipe);
@@ -208,8 +208,8 @@ classdef SmopClient < handle
             % We pretend that the max flow for all channels is same, so we
             % take the first channel's max flow value and return it.
             firstChannel = obj.config.printer.channels(1);
-            if isfield(firstChannel, 'props') && ...
-               isfield(firstChannel.props, 'maxFlow')
+            if isfield(firstChannel, "props") && ...
+               isfield(firstChannel.props, "maxFlow")
                 maxFlow = str2double(firstChannel.props.maxFlow);
             end
         end
@@ -225,7 +225,7 @@ classdef SmopClient < handle
             c = length(channels);
             criticalFlows = zeros(c,1);
             for jj = 1:c
-                if (isfield(channels(jj).props, 'criticalFlow'))
+                if (isfield(channels(jj).props, "criticalFlow"))
                     criticalFlows(jj) = channels(jj).props.criticalFlow;
                 end
             end
@@ -235,7 +235,7 @@ classdef SmopClient < handle
             if isstruct(obj.config)
                 channelCount = length(obj.config.printer.channels);
                 if channelCount < default
-                    throw(MException('smop:client', 'There must be at least 2 channels enabled in Odor Printer'));
+                    throw(MException("smop:client", "There must be at least 2 channels enabled in Odor Printer"));
                 end
             end
 
@@ -278,7 +278,7 @@ classdef SmopClient < handle
             pause(1);
             dataBytes = read(obj.socket);
             % remove leading zeros
-            dataBytes = dataBytes(find(dataBytes ~= 0, 1, 'first') : end);
+            dataBytes = dataBytes(find(dataBytes ~= 0, 1, "first") : end);
           end
           data = native2unicode(dataBytes);
         end
@@ -290,10 +290,10 @@ end
 % Removes leading blank characters from the string.
 % The leading blank chars may appear in the packets, as the SMOP server sends
 % \0 byte every second to check the connection status. These null-bytes are
-% then converted into ' ' by native2unicode, and then jsondecode fails
+% then converted into " " by native2unicode, and then jsondecode fails
 % to parse the string if it has leading blanks.
 function s = trim(text)
-  s = text(find(text > 32, 1, 'first') : end);
+  s = text(find(text > 32, 1, "first") : end);
 end
 
 % Returns either a packet content if its type matches the desired type,
@@ -301,9 +301,9 @@ end
 % valid packet.
 function content = getPacketContent(packet, type)
     content = 0;
-    isValidJson = all(isfield(packet, {'type', 'content'}));
+    isValidJson = all(isfield(packet, ["type", "content"]));
     if ~isValidJson
-        throw(MException('smop:client', 'invalid packet'))
+        throw(MException("smop:client", "invalid packet"))
     elseif strcmp(packet.type, type)
         content = packet.content;
     end
@@ -314,7 +314,7 @@ end
 % (or should these properties be defined in SMOP?
 function config = toConfig(json)
   packet = jsondecode(json);
-  config = getPacketContent(packet, 'config');
+  config = getPacketContent(packet, "config");
 
   for jj = 1:length(config.printer.channels)
       odor = config.printer.channels(jj).odor;
@@ -332,7 +332,7 @@ end
 % is not the one that is expected.
 function measurement = toMeasurement(json, source)
   packet = jsondecode(json);
-  measurement = getPacketContent(packet, 'measurement');
+  measurement = getPacketContent(packet, "measurement");
 
   if ~isstruct(measurement) || ~strcmp(measurement.source, source)
       measurement = 0;
@@ -347,7 +347,7 @@ end
 % { "type": "config",
 %   "content" : {
 %     "sources": ["dms" | "snt" | "pid"],
-%     "algorithm": string,       // algorithm name,  '' - default
+%     "algorithm": string,       // algorithm name,  "" - default
 %     "maxIterationNumber": int, // 0 - ignore
 %     "threshold": float, // diff between iterations; 0 – ignore
 %     "printer": {
