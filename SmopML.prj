@@ -1,5 +1,5 @@
 <deployment-project plugin="plugin.ezdeploy" plugin-version="1.0">
-  <configuration build-checksum="189000058" file="C:\Users\olequ\TUNI.fi\TG-SMELLODI - General\Software\ML\SmopML.prj" location="C:\Users\olequ\TUNI.fi\TG-SMELLODI - General\Software\ML" name="SmopML" preferred-package-location="C:\Users\olequ\TUNI.fi\TG-SMELLODI - General\Software\ML\bin\setup" preferred-package-type="package.type.exe" target="target.ezdeploy.standalone" target-name="Application Compiler">
+  <configuration build-checksum="2284989593" file="C:\Users\olequ\TUNI.fi\TG-SMELLODI - General\Software\ML\SmopML.prj" location="C:\Users\olequ\TUNI.fi\TG-SMELLODI - General\Software\ML" name="SmopML" preferred-package-location="C:\Users\olequ\TUNI.fi\TG-SMELLODI - General\Software\ML\bin\setup" preferred-package-type="package.type.exe" target="target.ezdeploy.standalone" target-name="Application Compiler">
     <param.appname>smop_ml</param.appname>
     <param.icon>${PROJECT_ROOT}\SmopML_resources\icon.ico</param.icon>
     <param.icons>
@@ -12,11 +12,11 @@
     <param.authnamewatermark>Philipp Müller, Oleg Špakov</param.authnamewatermark>
     <param.email />
     <param.company>Tampere University</param.company>
-    <param.summary />
+    <param.summary>Smellodi Odor Printer: ML application</param.summary>
     <param.description />
     <param.screenshot>${PROJECT_ROOT}\assets\images\icon.png</param.screenshot>
     <param.guid />
-    <param.installpath.string>\Tampere University\SmopML\</param.installpath.string>
+    <param.installpath.string>\Tampere University\smop_ml\</param.installpath.string>
     <param.installpath.combo>option.installpath.programfiles</param.installpath.combo>
     <param.logo>${PROJECT_ROOT}\assets\images\banner.png</param.logo>
     <param.install.notes />
@@ -35,7 +35,7 @@
     <param.web.mcr.name>SmopML_Online</param.web.mcr.name>
     <param.package.mcr.name>SmopML_Setup</param.package.mcr.name>
     <param.no.mcr.name>MyAppInstaller_app</param.no.mcr.name>
-    <param.windows.command.prompt>false</param.windows.command.prompt>
+    <param.windows.command.prompt>true</param.windows.command.prompt>
     <param.create.log>false</param.create.log>
     <param.log.file />
     <param.native.matlab>false</param.native.matlab>
@@ -52,9 +52,9 @@
       <param.authnamewatermark />
       <param.email />
       <param.company />
-      <param.summary />
       <param.description />
       <param.guid />
+      <param.installpath.string />
       <param.installpath.combo />
       <param.install.notes />
       <param.target.install.notes />
@@ -66,6 +66,7 @@
       <param.package.mcr />
       <param.no.mcr />
       <param.no.mcr.name />
+      <param.windows.command.prompt />
       <param.create.log />
       <param.log.file />
       <param.native.matlab />
@@ -73,7 +74,7 @@
       <param.example />
     </unset>
     <fileset.main>
-      <file>${PROJECT_ROOT}\smop_ml.m</file>
+      <file>${PROJECT_ROOT}\main.m</file>
     </fileset.main>
     <fileset.resources />
     <fileset.package />

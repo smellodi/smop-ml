@@ -12,7 +12,7 @@
 %
 % IF WE WANT TO INCLUDE PID, THEN THE WHOLE SYSTEM NEEDS TO BE REDESIGNED
 %
-% Philipp Muller, January 2024
+% Philipp Muller, January 2024  
 
 % IMPORTANT: Recipe name is parsed in the SMOP app, so do not change the
 % way it is constructed in this script.
@@ -20,7 +20,7 @@
 % Oleg Spakov, March 2024
 
 %% APP ENTRY
-function smop_ml(varargin)
+function main(varargin)
     args = argparser(varargin,nargin);
 
     % dbstop error

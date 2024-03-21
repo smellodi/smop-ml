@@ -58,10 +58,13 @@ function dict = argparser(args, n)
 
     for jj = 1:n
         p = split(string(args(jj)),"=");
+        wasParsed = true;
 
         if (length(p) == 1)    % parse flags as boolean values set to "true"
             if strcmpi(p(1), "ssv")
                 dict.ssv = true;
+            else
+                wasParsed = false;
             end
         else        % parse all arguments as a pair of "key"="value"
             try
@@ -96,11 +99,17 @@ function dict = argparser(args, n)
     % Enabled single-separation-voltage mode for DMS measurements (scope mode).
                 elseif strcmpi(p(1), "ssv")
                     dict.ssv = strcmpi(p(2), "true") || strcmp(p(2), "1");
+                else
+                    wasParsed = false;
                 end
             catch ex
-                fprintf("Failed to parse command-line argument '%s': %s", ...
+                fprintf("Failed to parse command-line argument '%s': %s\n", ...
                     args(jj), ex.message);
             end
+        end
+
+        if (~wasParsed)
+            fprintf("Unknown parameter '%s'\n", p(1));
         end
     end
 end
