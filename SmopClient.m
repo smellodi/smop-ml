@@ -263,6 +263,13 @@ classdef SmopClient < handle
                 algorithm = obj.config.algorithm;
             end
         end
+
+        function usv = getUsv(obj)
+            usv = 0;
+            if isstruct(obj.initialDMS) && ~isstruct(obj.initialDMS.setup.usv)
+                usv = obj.initialDMS.setup.usv;
+            end
+        end
     end
 
     methods (Access = private)
@@ -364,8 +371,8 @@ end
 %   "content" : {
 %     "source": "dms",
 %     "setup": { // from IV.Param. MeasurementParameters.SteppingControl
-%       "usv": { min, max, step },
-%       "ucv": { min, max, step } OR "value",
+%       "usv": { min, max, step }, OR <value> in single-Us mode
+%       "ucv": { min, max, step }
 %     },
 %     "conditions": { // from IV.Scan.SystemData.Sample  - OPTIONAL
 %       "flow": { avg, min max },
@@ -380,7 +387,7 @@ end
 %     }
 % } }
 
-% { "type": "measurement",  // CURRENTLY IGNORED
+% { "type": "measurement",
 %   "content" : {
 %     "source": "snt",
 %     "data": {

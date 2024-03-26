@@ -1,9 +1,8 @@
 % The learning process uses DIFFERENTIAL EVOLUTION algorithm described in 
 % Mariaana's manuscript.
 
-
 %% NOTES
-
+%
 % SUGGESTION: USE FLOW RATES OF 20 OR HIGHER FOR TARGET SCENT TO SPEED
 % UP RESPSONSE TIME/SHORTEN STABILIZATION TIME
 % 
@@ -13,7 +12,7 @@
 % IF WE WANT TO INCLUDE PID, THEN THE WHOLE SYSTEM NEEDS TO BE REDESIGNED
 %
 % Philipp Muller, January 2024  
-
+%
 % IMPORTANT: Recipe name is parsed in the SMOP app, so do not change the
 % way it is constructed in this script.
 %
@@ -69,11 +68,11 @@ function main(varargin)
     gas.n = smopClient.getChannelCount(2);
     
     fprintf("%-20s n = %d, min = %d ccm, max = %d ccm\n", ...
-        "Gas params:", gas.n, gas.min, gas.max);
+        "Gas parameters:", gas.n, gas.min, gas.max);
     fprintf("%-20s name = %s, cr = %.2f, f = %.2f\n", ...
-        "Alg params:", args.alg, args.cr, args.f);
+        "Alg parameters:", args.alg, args.cr, args.f);
     fprintf("%-20s mi = %d, th = %.2f\n", ...
-        "Search params:", args.mi, args.th);
+        "Search parameters:", args.mi, args.th);
 
     % Randomization offset. This is max offset applied to the originally 
     % generated flow value if this flow does not pass the validation process
@@ -90,21 +89,16 @@ function main(varargin)
 
     %% STEP 3: Read in message with DMS measurement from target scent
     
-    % Separation voltage used in DMS scope mode (i.e. args.ssv == 1)
-    usv = 0;
-    
     initM = smopClient.getInitialMeasurement();
 
+    % Separation voltage used in DMS scope mode
+    usv = smopClient.getUsv();
+
     if isstruct(initM.dms)
-        if args.ssv
-            [usv, initDMS] = getDmsSingleLine(initM.dms,0.5);
+        initM.dms = initM.dms.data.positive;
+        if usv > 0
             fprintf("DMS scan parameters: Us = %.1f V\n", usv);
-            initM.dms = initDMS;
-            clear initDMS;
-        else   % use full DMS scan
-            usv = 0;
-            initM.dms = initM.dms.data.positive;
-    
+        else
             fprintf("DMS scan parameters: full scan\n");
         end
     else
@@ -489,21 +483,6 @@ function V = roundTo(V, dec)
             end
         end
     end
-end
-
-% Computes the separation voltage (usv) closest to the linePosition that
-% should be from [0:1] interval (0 corresponds to dms.setup.usv.min 
-% and 1 corresponds to dms.setup.usv.max)
-function [usv, data] = getDmsSingleLine(dms, linePosition)
-    % compute the Us line at a specific location in the full DMS scan:
-    step = round(linePosition * dms.setup.usv.steps);
-    interval = (dms.setup.usv.max - dms.setup.usv.min) / ...
-        (dms.setup.usv.steps - 1);
-    usv = dms.setup.usv.min + interval * (step - 1);
-
-    start = dms.setup.ucv.steps * (step - 1);
-    end_ = start + dms.setup.ucv.steps;
-    data = dms.data.positive(start+1:end_);
 end
 
 % Formats gas names N with their flows V as "GAS1=FLOW1 GAS2=FLOW2 ..."

@@ -21,8 +21,7 @@ function dict = argparser(args, n)
         "dec", 0, ...
         "mi", 8, ...
         "th", 0.5, ...
-        "alg", algorithms(1), ...
-        "ssv", false ...
+        "alg", algorithms(1) ...
     );
 
     fprintf("===============================\n");
@@ -44,16 +43,9 @@ function dict = argparser(args, n)
     fprintf("    th [double]   proximity threshold (default is %.2f)\n", dict.th);
     fprintf("    alg [str]     algorithm to use (default is '%s')\n", dict.alg);
     fprintf("                      available values: [%s]\n", join(algorithms,", "));
-    fprintf("    ssv [bool]    flag that enabled single DMS separation voltage\n");
-    fprintf("                      (default is %s, i.e. full scan)\n", ...
-        string(dict.ssv));
     fprintf("\n");
     fprintf("Example:\n");
-    fprintf("    smop_ml ip=192.168.1.4 f=0.6 ssv\n");   
-    fprintf("    smop_ml cr=0.9 dec=-1 mi=12 ssv=true\n");   
-    fprintf("\n");
-    fprintf("Note how flags can be declared with or without the boolean value:" + ...
-        "\n    use either 'ssv', or 'ssv=true' or 'ssv=1' to enable 'ssv'\n");
+    fprintf("    smop_ml ip=192.168.1.4 cr=0.9 f=0.6 mi=12 dec=-1\n");
     fprintf("\n\n");
 
     for jj = 1:n
@@ -61,8 +53,8 @@ function dict = argparser(args, n)
         wasParsed = true;
 
         if (length(p) == 1)    % parse flags as boolean values set to "true"
-            if strcmpi(p(1), "ssv")
-                dict.ssv = true;
+            if strcmpi(p(1), "-")
+                % no such parameters yet, the comparison above is a dummy
             else
                 wasParsed = false;
             end
@@ -96,9 +88,6 @@ function dict = argparser(args, n)
     % Define which distance measure to use.
                 elseif strcmpi(p(1), "alg")
                     dict.alg = p(2);
-    % Enabled single-separation-voltage mode for DMS measurements (scope mode).
-                elseif strcmpi(p(1), "ssv")
-                    dict.ssv = strcmpi(p(2), "true") || strcmp(p(2), "1");
                 else
                     wasParsed = false;
                 end
