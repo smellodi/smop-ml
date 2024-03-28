@@ -102,7 +102,14 @@ classdef SmopClient < handle
                 return;                  % lets return it immediately
             end
 
-            measrm = obj.waitForMeasurement();   % otherwise lets read the stream again
+            measrm = obj.waitForMeasurement();  % otherwise lets read 
+                                                % the stream again
+            if isstruct(measrm.dms)
+                obj.initialDMS = measrm.dms;
+            end
+            if isstruct(measrm.snt)
+                obj.initialSNT = measrm.snt;
+            end
         end
         
         % Reads the network stream, returns DMS, SNT and PID measurements if any.
