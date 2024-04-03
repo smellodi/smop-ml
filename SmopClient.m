@@ -169,14 +169,13 @@ classdef SmopClient < handle
         
         % Sends the recipe to SMOP.
         % Exceptions: network stream reading
-        function sendRecipe(obj, name, flows, isFinished, rmse, usv)
+        function sendRecipe(obj, name, flows, isFinished, distance)
           arguments
             obj
             name
             flows
             isFinished = false
-            rmse = 1e5
-            usv = 0
+            distance = 1e5
           end
         
           c = length(flows);
@@ -192,8 +191,7 @@ classdef SmopClient < handle
               "content", struct( ...
                 "name", name, ...
                 "isFinal", isFinished, ...
-                "rmse", rmse, ...
-                "usv", usv, ...
+                "distance", distance, ...
                 "channels", channels ...
               ));
         
@@ -215,8 +213,7 @@ classdef SmopClient < handle
             % We pretend that the max flow for all channels is same, so we
             % take the first channel's max flow value and return it.
             firstChannel = obj.config.printer.channels(1);
-            if isfield(firstChannel, "props") && ...
-               isfield(firstChannel.props, "maxFlow")
+            if isfield(firstChannel.props, "maxFlow")
                 maxFlow = firstChannel.props.maxFlow;
             end
         end
@@ -260,16 +257,10 @@ classdef SmopClient < handle
             end
         end
 
-        function criticalFlows = getCriticalFlow(obj, default)
-            criticalFlows = default;
-
-            if ~isstruct(obj.config)
-                return
-            end
-
+        function criticalFlows = getCriticalFlows(obj)
             channels = obj.config.printer.channels;
             c = length(channels);
-            criticalFlows = zeros(c,1);
+            criticalFlows = ones(c,1) * 100;
             for jj = 1:c
                 if (isfield(channels(jj).props, "criticalFlow"))
                     criticalFlows(jj) = channels(jj).props.criticalFlow;

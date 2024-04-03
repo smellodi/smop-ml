@@ -84,7 +84,7 @@ function main(varargin)
     % To be used in "limitVectors" function. Note that this function 
     % operates with 2-3 gases only, thus only 3 limits are used
     % (no limitation is applied if there are 4 or more gases)
-    gas.limits = smopClient.getCriticalFlow([55; 60; 70]);
+    gas.limits = smopClient.getCriticalFlows();
 
     % Gas names often used to print out info
     gas.names = smopClient.gases;
@@ -93,15 +93,17 @@ function main(varargin)
     
     initM = smopClient.getInitialMeasurement();
 
-    % Separation voltage used in DMS scope mode
-    usv = smopClient.getUsv();
-
     if isstruct(initM.dms)
         initM.dms = initM.dms.data.positive;
+        
+        % Separation voltage used in DMS scope mode
+        usv = smopClient.getUsv();
+
+        fprintf("DMS scan parameters: ");
         if usv > 0
-            fprintf("DMS scan parameters: Us = %.1f V\n", usv);
+            fprintf("Us = %.1f V\n", usv);
         else
-            fprintf("DMS scan parameters: full scan\n");
+            fprintf("full scan\n");
         end
     else
         initM.dms = [];
@@ -147,7 +149,7 @@ function main(varargin)
         pause(0.5); % simply, to make ML being not too fast in SMOP interface
     
         recipeName = sprintf("Reference #%d", jj);
-        smopClient.sendRecipe(recipeName,F(:,jj),false,cfm,usv);
+        smopClient.sendRecipe(recipeName,F(:,jj),false,cfm);
         clear recipeName;
 
         fprintf("[%d] %s", jj, formatVector(gas.names,F,jj));
@@ -215,7 +217,7 @@ function main(varargin)
     
                 % This vector was not measured yet, so lets do it
                 recipeName = sprintf("Iteration #%d, Search #%d", iter, jj); 
-                smopClient.sendRecipe(recipeName,U(:,jj),isFinished,cfm,usv);
+                smopClient.sendRecipe(recipeName,U(:,jj),isFinished,cfm);
                 clear recipeName;
     
                 % Wait for new measurement and add it to the table of 
