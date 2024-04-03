@@ -1,5 +1,5 @@
-% The learning process uses DIFFERENTIAL EVOLUTION algorithm described in 
-% Mariaana's manuscript.
+% The ML process using DIFFERENTIAL EVOLUTION algorithm
+% Described in Mariaana's manuscript.
 
 %% NOTES
 %
@@ -58,7 +58,7 @@ function main(varargin)
     % Maximum number of iterations
     args.mi = smopClient.getMaxIterationCount(args.mi);
     
-    % RMSE threshold for terminating iterative process
+    % Distance threshold for terminating iterative process
     args.th = smopClient.getThreshold(args.th);
     
     % Define which distance measure to use
@@ -80,9 +80,11 @@ function main(varargin)
     gas.df = 0.2 * (gas.max - gas.min);
 
     % Limits are used to detect if the generated flow values may cause
-    % measurement sensor oversaturation.
-    % To be used in "limitVectors" function.
-    gas.limits = smopClient.getCriticalFlow([55; 60]);
+    % measurement sensor oversaturation. 
+    % To be used in "limitVectors" function. Note that this function 
+    % operates with 2-3 gases only, thus only 3 limits are used
+    % (no limitation is applied if there are 4 or more gases)
+    gas.limits = smopClient.getCriticalFlow([55; 60; 70]);
 
     % Gas names often used to print out info
     gas.names = smopClient.gases;
@@ -120,13 +122,13 @@ function main(varargin)
     F = createInitialVectors(gas.n,gas.min,gas.max);
 
     % Both flows set to gas.max result in oversaturated PID, therefore 
-    %   we apply some limitations as described in limitVectors.
+    % we apply some limitations as described in limitVectors.
     F = limitVectors(F,gas.limits);
     F = roundTo(F,args.dec);
 
     % Population size: set of best vectors
     % Typically 10 times the dimension n of x, but this may be too long... 
-    %    keep it same as the number of initial vectors.
+    % ..keep it same as the number of initial vectors.
     X = F;
     
     XI = 1:size(X,2); % range of X and U
@@ -136,9 +138,9 @@ function main(varargin)
     % All measurements
     M = arrayfun(@(x)struct("dms",0,"snt",0),XI);
 
-    gm = 1e8;   % overall minimum RMSE (global minima)
+    gm = 1e8;   % overall minimum distance (global minima)
     gmId = -1;  % M and F index of the global minima;
-    cfm = 1e8;  % last search RMSE (measured trials only)
+    cfm = 1e8;  % last search distance (measured trials only)
     
     fprintf("\nCollecting initial measurements:\n");
     for jj = XI
@@ -152,14 +154,12 @@ function main(varargin)
     
         M(jj) = getMeasurement(smopClient);
 
-        % THIS VERSION calculates RMSEs of differences between vector 
-        % pairs as a measure of closeness to the initial dispersion plot. 
         cfm = getSimilarityMeasure(args.alg,initM,M(jj));
         if (cfm < gm)
             gm = cfm;
             gmId = jj;
         end
-        fprintf(" RMSE=%6.3f\n", cfm);
+        fprintf(" DIST=%6.3f\n", cfm);
     end
 
     fprintf("GM: %.4f [%s]\n", gm, formatVector(gas.names,F,gmId));
@@ -169,12 +169,12 @@ function main(varargin)
     iter = 1;   % iteration counter
     MI = XI;    % indexes of M corresponding to vectors consisting X
 
-    isFinished = false;     % switch for terminating iterative process
+    isFinished = false;     % switch for terminating the iterative process
 
     while (~isFinished)
         fprintf("\nIteration #%d:\n", iter);
 
-        im = 1e8;   % minimum RMSE for vectors tested in this iteration
+        im = 1e8;   % minimum distance for vectors tested in this iteration
         imId = -1;  % U index that corresponds to 'im' (iteration minima)
     
         %% STEP 5a: Differential evolution
@@ -193,22 +193,22 @@ function main(varargin)
         
         %% STEP 5b: Selecting better vectors
 
-        % Compute cost function values for trial vectors and corresponding
-        %   target vectors
+        % Compute distances from the initial measurements and measureemnts 
+        % of trial vectors and corresponding target vectors
     
         for jj = XI
-            %% STEP 5b1: Compute RMSE of TARGET vector
+            %% STEP 5b1: Compute distance of TARGET vector
 
             cfX = getSimilarityMeasure(args.alg,initM,M(MI(jj)));
 
-            %% STEP 5b2: Compute RMSE of TRIAL vector
+            %% STEP 5b2: Compute distance of TRIAL vector
     
             % Find shuffled intertersection of indexes for which F and U
             % have same flow rates
             C = getCommonIndices(F,U,jj);
     
-            if ~isempty(C)  % measurement of this vector exists
-                kk = C(1);  % already, lets take it from the database
+            if ~isempty(C)  % a measurement of this vector exists
+                kk = C(1);  % already, lets take it from the database M
                 fprintf("[%d] REPEAT  %s", jj, formatVector(gas.names,F,kk));
             else
                 pause(0.5);     % emulate some heavy ML search :)
@@ -227,7 +227,7 @@ function main(varargin)
             end
 
             cfU = getSimilarityMeasure(args.alg,initM,M(kk));
-            fprintf(" RMSE=%6.3f", cfU);
+            fprintf(" DIST=%6.3f", cfU);
 
             if isempty(C)   % memorize cf of measured data for recipe
                 cfm = cfU;
@@ -235,7 +235,7 @@ function main(varargin)
 
             clear C;
             
-            %% STEP 5b3: update RMSE minimas
+            %% STEP 5b3: update distance minimas
 
             cf = min(cfU,cfX);
             info = ["  ", "  ", ""];
@@ -254,7 +254,7 @@ function main(varargin)
                 info(2) = "IM";
             end
     
-            %% STEP 5b4: replace target vec with trial vec if it has lower RMSE
+            %% STEP 5b4: replace target vec with trial vec if it has lower cf
 
             if cfU < cfX
                 X(:,jj) = U(:,jj);
@@ -285,7 +285,7 @@ function main(varargin)
             % Send the final recipe
             flows = F(:,gmId);
             smopClient.sendRecipe(recipeName, flows, isFinished, cfm);
-            fprintf("  %s, RMSE = %.4f\n\nFinished\n\n", ...
+            fprintf("  %s, DIST = %.4f\n\nFinished\n\n", ...
                 formatVector(gas.names,F,gmId), gm);
             clear recipeName flows;
         else
@@ -336,35 +336,38 @@ function F = createInitialVectors(n, min_, max_)
 end
 
 % Finds common indices and returns a permutated array of them.
-% Note: currently supports 2-gas mixtures only.
-function idMix = getCommonIndices(V, U, ucol)
-    % Find samples for which V and U have same flow rate for 
-    %   the first gas (isopropanol) and ..
-    idGas1 = find(V(1,:) == U(1,ucol));
-    %   .. the second gas (ethanol or n-Butanol)
-    idGas2 = find(V(2,:) == U(2,ucol));
+function M = getCommonIndices(V, U, ucol)
+    [n,c] = size(V);
+
+    % The initial intersection array stores all indices
+    M = 1:c;
+
+    % Find indices of samples for which V and U have same flow rates
+    for jj = 1:n
+        ID = find(V(jj,:) == U(jj,ucol));
+        M = intersect(ID,M);
+        if isempty(M)
+            return      % the result is empty, no need to continue
+        end
+    end
     
-    % Get intersection and shuffle it in random order
-    % NOTE: some vectors might be missing from the data
-    idMix = intersect(idGas1,idGas2);
-    idMix = idMix(randperm(numel(idMix)));
+    % Shuffle the resulting array in random order
+    M = M(randperm(numel(M)));
 end
 
-% Computes a similarity (distance) measure.
-% For now, we use RMSE to represent such a measure.
-function rmse = getSimilarityMeasure(alg, measrm1, measrm2)
-    rmse = 1e8;
+% A cost function that measures similarity (distance) between dispersion plot 
+% of the mixture we want to recreate and the training dispesion plot. 
+function distance = getSimilarityMeasure(alg, measrm1, measrm2)
+    distance = 1e8;
 
-    % COST FUNCTION WILL BE FUNCTION THAT MEASURES SIMILARITY OF DISPERSION
-    % PLOT OF MIXTURE WE WANT TO RECREATE AND ONE TRAINING DISPERSION PLOT
-    % NAA WILL TEST DIFFERENT MEASURES IN HER THESIS
     if (alg == "euclidean")
+        % For Euclidean algorithm we use RMSE as the distance.
         if ~isempty(measrm2.dms)
-            rmse = sqrt(mean((measrm1.dms - measrm2.dms).^2));
+            distance = sqrt(mean((measrm1.dms - measrm2.dms).^2));
         elseif ~isempty(measrm2.snt)
-            rmse = sqrt(mean((measrm1.snt - measrm2.snt).^2));
-            if rmse > 1000              % huge values observed with real SNT
-                rmse = rmse / 100000;   % something to remove in future
+            distance = sqrt(mean((measrm1.snt - measrm2.snt).^2));
+            if distance > 10000            % huge values observed with real SNT
+                distance = distance / 100000;  % TODO: remove in future
             end
         end
     end
@@ -381,10 +384,8 @@ function V = mutate(X, f)
         ids(ids == jj) = [];   % remove integer jj
         
         % Compute donor vector from first three vectors
-        % pick three distinct dispersion plots (also PID, SNT) (need to be
-        % distinct from each other and from x)
-        % QUESTION: Do they need to be from different concentration
-        % combinations or could they be also from the same concentration
+        % pick three distinct dispersion plots (also PID, SNT) 
+        % (need to be distinct from each other and from x)
         value = X(:,ids(1)) + f * (X(:,ids(2)) - X(:,ids(3)));
 
         V(:,jj) = value;
@@ -455,13 +456,22 @@ end
 % We assume that limits are semi-axis (a,b) of an ellipse, and if the
 % vector lies outside of this ellipse, then it is "pulled" toward the
 % center to the ellipse edge.
-% NOTE: will be applied only for 2-dimensional vectors (2 gases)
+% NOTE: will be applied only for 2 or 3 -dimensional vectors (2-3 gases)
 function V = limitVectors(V, limits)
     [n,np] = size(V);
-    if (n == 2)
+    if n == 2
         for jj = 1:np
             a = atan2(V(2,jj),V(1,jj));
             lf = [limits(1) * cos(a); limits(2) * sin(a)];
+            V(:,jj) = min(lf,V(:,jj));
+        end
+    elseif n == 3
+        for jj = 1:np
+            a = atan2(V(2,jj),V(1,jj));
+            b = atan2(V(3,jj),V(1,jj));
+            lf = [limits(1) * cos(a) * cos(b); ...
+                  limits(2) * sin(a); ...
+                  limits(3) * sin(b)];
             V(:,jj) = min(lf,V(:,jj));
         end
     end

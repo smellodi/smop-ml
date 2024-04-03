@@ -217,37 +217,19 @@ classdef SmopClient < handle
             firstChannel = obj.config.printer.channels(1);
             if isfield(firstChannel, "props") && ...
                isfield(firstChannel.props, "maxFlow")
-                maxFlow = str2double(firstChannel.props.maxFlow);
+                maxFlow = firstChannel.props.maxFlow;
             end
         end
 
-        function criticalFlows = getCriticalFlow(obj, default)
-            criticalFlows = default;
+        function channelCount = getChannelCount(obj, minimum)
+            channelCount = minimum;
 
-            if ~isstruct(obj.config)
-                return
-            end
-
-            channels = obj.config.printer.channels;
-            c = length(channels);
-            criticalFlows = zeros(c,1);
-            for jj = 1:c
-                if (isfield(channels(jj).props, "criticalFlow"))
-                    criticalFlows(jj) = channels(jj).props.criticalFlow;
-                end
-            end
-        end
-
-        function channelCount = getChannelCount(obj, default)
             if isstruct(obj.config)
                 channelCount = length(obj.config.printer.channels);
-                if channelCount < default
+                if channelCount < minimum
                     throw(MException("smop:client", "There must be at least 2 channels enabled in Odor Printer"));
                 end
             end
-
-            % OLEG: for now, the code requires exactly 2 chemicals to operate
-            channelCount = default;
         end
 
         function maxIterCount = getMaxIterationCount(obj, default)
@@ -275,6 +257,23 @@ classdef SmopClient < handle
             usv = 0;
             if isstruct(obj.initialDMS) && ~isstruct(obj.initialDMS.setup.usv)
                 usv = obj.initialDMS.setup.usv;
+            end
+        end
+
+        function criticalFlows = getCriticalFlow(obj, default)
+            criticalFlows = default;
+
+            if ~isstruct(obj.config)
+                return
+            end
+
+            channels = obj.config.printer.channels;
+            c = length(channels);
+            criticalFlows = zeros(c,1);
+            for jj = 1:c
+                if (isfield(channels(jj).props, "criticalFlow"))
+                    criticalFlows(jj) = channels(jj).props.criticalFlow;
+                end
             end
         end
     end
@@ -325,21 +324,10 @@ end
 
 % Returns content of the config packet.
 % Note how we define some propertes right HERE!
-% (or should these properties be defined in SMOP?
+% (or should these properties be defined in SMOP?)
 function config = toConfig(json)
   packet = jsondecode(json);
   config = getPacketContent(packet, "config");
-
-  for jj = 1:length(config.printer.channels)
-      odor = config.printer.channels(jj).odor;
-      if (strcmpi(odor, "ipa"))
-          config.printer.channels(jj).props.criticalFlow = 55;
-      elseif (strcmpi(odor, "ethanol"))
-          config.printer.channels(jj).props.criticalFlow = 65;
-      elseif (strcmpi(odor, "nbutanol"))
-          config.printer.channels(jj).props.criticalFlow = 90;
-      end
-  end
 end
 
 % Returns content of a measurement packet, or 0 if this measurement source
