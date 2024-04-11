@@ -65,7 +65,7 @@ function main(varargin)
     args.alg = smopClient.getAlgorithm(args.alg);
     
     % Size of a vector (number of chemicals)
-    gas.n = smopClient.getChannelCount(2);
+    gas.n = smopClient.getChannelCount(1);
     
     fprintf("%-20s n = %d, min = %d ccm, max = %d ccm\n", ...
         "Gas parameters:", gas.n, gas.min, gas.max);
@@ -146,7 +146,7 @@ function main(varargin)
     
     fprintf("\nCollecting initial measurements:\n");
     for jj = XI
-        pause(0.5); % simply, to make ML being not too fast in SMOP interface
+        pause(0.1); % simply, to make ML being not too fast in SMOP interface
     
         recipeName = sprintf("Reference #%d", jj);
         smopClient.sendRecipe(recipeName,F(:,jj),false,cfm);
@@ -213,7 +213,7 @@ function main(varargin)
                 kk = C(1);  % already, lets take it from the database M
                 fprintf("[%d] REPEAT  %s", jj, formatVector(gas.names,F,kk));
             else
-                pause(0.5);     % emulate some heavy ML search :)
+                pause(0.1);     % emulate some heavy ML search :)
     
                 % This vector was not measured yet, so lets do it
                 recipeName = sprintf("Iteration #%d, Search #%d", iter, jj); 
@@ -335,6 +335,10 @@ function F = createInitialVectors(n, min_, max_)
                                     % permutations, and transpose the matrix
     center = (max_ + min_) / 2;
     F = [V repmat(center,n,1)];     % add central point
+
+    while size(F) < 4               % in case n = 1 that gives only 3 points
+        F = [F randi(max_)];        % add a random point
+    end
 end
 
 % Finds common indices and returns a permutated array of them.

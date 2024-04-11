@@ -194,6 +194,10 @@ classdef SmopClient < handle
                 "distance", distance, ...
                 "channels", channels ...
               ));
+
+          if c == 1
+              recipe.content.channels = {channels};
+          end
         
           json = jsonencode(recipe);
           dataBytes = uint8(json);
@@ -224,7 +228,9 @@ classdef SmopClient < handle
             if isstruct(obj.config)
                 channelCount = length(obj.config.printer.channels);
                 if channelCount < minimum
-                    throw(MException("smop:client", "There must be at least 2 channels enabled in Odor Printer"));
+                    msg = sprintf("There must be at least %d channels" + ...
+                        " enabled in Odor Printer", minimum);
+                    throw(MException("smop:client", msg));
                 end
             end
         end
@@ -347,8 +353,10 @@ end
 %       "channels": [{   // an array of the device channels
 %         "id": int,	 // channel ID
 %         "odor": string, // name of the odor
-%         "props": {<string>: string}, // list of any properties, 
-%                                   default is "props": { "maxflow": "50" }
+%         "props": {      // list of properties
+%            “maxflow”: float,		// max allowed flow in nccm
+%            “criticalFlow”: float		// PID oversaturating flow
+%         }
 %       }]
 %     }
 % } }
@@ -393,9 +401,8 @@ end
 %   "content" : {
 %     "name": string,     // whatever name to display in SMOP UI
 %     "isFinal": bool,
-%     "minRMSE": float,
-%     "usv": float,	      // Us to scan next, or 0 for the full scan
-%     "humidity": float,  // % - OPTIONAL
+%     "distance": float,
+%     "humidity": float?,  // % - OPTIONAL
 %     "channels": [{      // an array of each channel configuration
 %       "id": int,        // 1..5
 %       "flow": float,    // sccm
