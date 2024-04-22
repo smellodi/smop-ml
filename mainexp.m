@@ -1,5 +1,5 @@
 % The ML process using DIFFERENTIAL EVOLUTION algorithm
-% Described in Mariaana's manuscript.
+% Few alternative implemenations
 
 %% NOTES
 %
@@ -13,7 +13,8 @@
 % Oleg Spakov, March 2024
 
 %% APP ENTRY
-function main(varargin)
+function mainexp(varargin)
+
     args = argparser(varargin,nargin);
 
     % dbstop error
@@ -176,13 +177,13 @@ function main(varargin)
         %% STEP 5a: Differential evolution
         % [https://en.wikipedia.org/wiki/Differential_evolution]
 
-        V = mutate(X,args.f);               % generate new vectors
-        V = limitValues(V,gas.min,gas.max); % limit their values 
-        U = crossover(X,V,args.cr);         % mix old and new vectors
-        U = validate(U,gas.df);             % remove repetitions
-        U = limitValues(U,gas.min,gas.max); % limit values after rndmzation
-        U = limitVectors(U,gas.limits);     % avoid oversaturation
-        U = roundTo(U,args.dec);            % round flow values
+        V = mutate(X,args.f,gas.min,gas.max);   % generate new vectors
+        %V = limitValues(V,gas.min,gas.max);    % limit their values 
+        U = crossover(X,V,args.cr);             % mix old and new vectors
+        U = validate(U,gas.df,gas.min,gas.max); % remove repetitions
+        %U = limitValues(U,gas.min,gas.max);  % limit values after rndmzation
+        U = limitVectors(U,gas.limits);      % avoid oversaturation
+        U = roundTo(U,args.dec);             % round flow values
 
         fprintf("Flows to test:\n%s", formatVectorsAll(gas.names,U));
         clear V;
@@ -199,38 +200,26 @@ function main(varargin)
 
             %% STEP 5b2: Compute distance of TRIAL vector
     
-            % Find shuffled intertersection of indexes for which F and U
-            % have same flow rates
-            C = getCommonIndices(F,U,jj);
-    
-            if ~isempty(C)  % a measurement of this vector exists
-                kk = C(1);  % already, lets take it from the database M
-                fprintf("[%d] REPEAT  %s", jj, formatVector(gas.names,F,kk));
-            else
-                pause(0.1);     % emulate some heavy ML search :)
-    
-                % This vector was not measured yet, so lets do it
-                recipeName = sprintf("Iteration #%d, Search #%d", iter, jj); 
-                smopClient.sendRecipe(recipeName,U(:,jj),isFinished,cfm);
-                clear recipeName;
-    
-                % Wait for new measurement and add it to the table of 
-                % measured recipes
-                fprintf("[%d] MEASURE %s", jj, formatVector(gas.names,U,jj));
-                kk = length(M) + 1;
-                M(kk) = getMeasurement(smopClient);
-                F(:,kk) = U(:,jj);
-            end
+            pause(0.1);     % emulate some heavy ML search :)
+
+            % This vector was not measured yet, so lets do it
+            recipeName = sprintf("Iteration #%d, Search #%d", iter, jj); 
+            recipeVector = limitValues(U(:,jj),gas.min,gas.max);
+            smopClient.sendRecipe(recipeName,recipeVector,isFinished,cfm);
+            clear recipeName recipeVector;
+
+            % Wait for new measurement and add it to the table of 
+            % measured recipes
+            fprintf("[%d] %s", jj, formatVector(gas.names,U,jj));
+            kk = length(M) + 1;
+            M(kk) = getMeasurement(smopClient);
+            F(:,kk) = U(:,jj);
 
             cfU = getSimilarityMeasure(args.alg,initM,M(kk));
             fprintf(" DIST=%6.3f", cfU);
 
-            if isempty(C)   % memorize cf of measured data for recipe
-                cfm = cfU;
-            end
+            cfm = cfU;
 
-            clear C;
-            
             %% STEP 5b3: update distance minimas
 
             cf = min(cfU,cfX);
@@ -279,11 +268,11 @@ function main(varargin)
     
         if isFinished
             % Send the final recipe
-            flows = F(:,gmId);
-            smopClient.sendRecipe(recipeName, flows, isFinished, cfm);
+            recipeVector = limitValues(F(:,gmId),gas.min,gas.max);
+            smopClient.sendRecipe(recipeName, recipeVector, isFinished, cfm);
             fprintf("  %s, DIST = %.4f\n\nFinished\n\n", ...
                 formatVector(gas.names,F,gmId), gm);
-            clear recipeName flows;
+            clear recipeName recipeVector;
         else
             fprintf("Continuing the search, best vectors are:\n%s", ...
                 formatVectorsAll(gas.names,X));
@@ -318,41 +307,28 @@ end
 % combinations of min_ and max_, plus the vector with central values.
 function F = createInitialVectors(n, min_, max_)
     V = [];
+
+    interval = max_ - min_;
+    center = (max_ + min_) / 2;
+
+    min_ = min_ + interval * 0.12;
+    max_ = max_ - interval * 0.08;   % different delta to add some imbalance
+    
     for jj = n:-1:0
-        a = repmat(min_,1,jj);      % [0, 0, ...  (or empty list if jj == 0)
-        b = repmat(max_,1,n-jj);    % ... 50, 50] (or empty list if jj == n)
+        a = repmat(min_,1,jj);      % [min, min, ...  (or nothing if jj == 0)
+        b = repmat(max_,1,n-jj);    % ... max, max] (or nothing if jj == n)
         U = [a b];                  % unite both parts
         U = perms(U);               % save all permutations as rows
         V = [V;U];                  % add to the resulting list
     end
+    
     V = unique(V,"rows")';          % remove duplications produced by
                                     % permutations, and transpose the matrix
-    center = (max_ + min_) / 2;
     F = [V repmat(center,n,1)];     % add central point
 
-    while size(F) < 4               % in case n = 1 that gives only 3 points
-        F = [F randi(max_)];        % add a random point
+    while size(F) < 4               % in case n = 1 that gives only 3 values
+        F = [F randi([min_,max_])]; % add a random value
     end
-end
-
-% Finds common indices and returns a permutated array of them.
-function M = getCommonIndices(V, U, ucol)
-    [n,c] = size(V);
-
-    % The initial intersection array stores all indices
-    M = 1:c;
-
-    % Find indices of samples for which V and U have same flow rates
-    for jj = 1:n
-        ID = find(V(jj,:) == U(jj,ucol));
-        M = intersect(ID,M);
-        if isempty(M)
-            return      % the result is empty, no need to continue
-        end
-    end
-    
-    % Shuffle the resulting array in random order
-    M = M(randperm(numel(M)));
 end
 
 % A cost function that measures similarity (distance) between dispersion plot 
@@ -374,22 +350,32 @@ function distance = getSimilarityMeasure(alg, measrm1, measrm2)
 end
 
 % Mutation
-function V = mutate(X, f)
+function V = mutate(X, f, min_, max_)
     [n,np] = size(X);
     V = nan(n,np);
 
-    for jj = 1:np
-        % Pick three distinct vectors from X that are different from jj
-        ids = randperm(np);    % random permutation of integers 1 to np
-        ids(ids == jj) = [];   % remove integer jj
-        
-        % Compute donor vector from first three vectors
-        % pick three distinct dispersion plots (also PID, SNT) 
-        % (need to be distinct from each other and from x)
-        value = X(:,ids(1)) + f * (X(:,ids(2)) - X(:,ids(3)));
+    % Allow to accept mutated vectors with values slightly beyond the
+    % limits. The values anyway will be adjusted to bring them within 
+    % the scope in the limitValues function
 
-        V(:,jj) = value;
+    delta = (max_ - min_) * 0.05;   % 5% to each side
+    min_ = min_ - delta;
+    max_ = max_ + delta;
+
+    for jj = 1:np
+        V(:,jj) = keepInRange(X,jj,min_,max_,@(Xa,kk) mutateOne(Xa,f,kk));
     end
+end
+
+function U = mutateOne(X, f, jj)
+    % Pick three distinct vectors from X that are different from jj
+    ids = randperm(size(X,2));  % random permutation of integers 1 to np
+    ids(ids == jj) = [];        % remove integer jj
+
+    % Compute donor vector from first three vectors
+    % pick three distinct dispersion plots (also PID, SNT) 
+    % (need to be distinct from each other and from x)
+    U = X(:,ids(1)) + f * (X(:,ids(2)) - X(:,ids(3)));
 end
 
 % Uses binomial method for combining components from target and donor vectors
@@ -417,7 +403,7 @@ function U = crossover(X, V, cr)
 end
 
 % Avoid the search algorithm to stuck with testing same or similar vectors
-function V = validate(V, delta)
+function V = validate(V, delta, min_, max_)
     [n,np] = size(V);
     interval = [-delta, delta];
 
@@ -425,7 +411,11 @@ function V = validate(V, delta)
     for jj = 2:np
         for kk = 1:(jj-1)
             if V(:,jj) == V(:,kk)
-                V(:,kk) = V(:,kk) + randi(interval,n,1);
+                prev = V(:,kk);
+                V(:,kk) = keepInRange(V,kk,min_,max_, ...
+                    @(Xa,kk) Xa(:,kk) + randi(interval,n,1));
+                fprintf("Validation: [%d] '%s' >> '%s'\n", ...
+                    kk, num2str(prev'," %.1f"), num2str(V(:,kk)'," %.1f"));
             end
         end
     end
@@ -441,7 +431,11 @@ function V = validate(V, delta)
     % .. then randomize those values a bit
     for kk = 1:n
         if allSame(kk)
-            V(kk,:) = V(kk,:) + randi(interval,1,np);
+            prev = V(kk,:);
+            V(kk,:) = keepInRange(V,kk,min_,max_, ...
+                @(Xa,kk) Xa(kk,:) + randi(interval,1,np));
+            fprintf("Validation: '%s' >> '%s'\n", ...
+                num2str(prev," %.1f"), num2str(V(kk,:)," %.1f"));
         end
     end
 end
@@ -519,5 +513,35 @@ function s = formatVectorsAll(N, V)
             s = sprintf("%s %4.1f", s, V(jj,kk));
         end
         s = sprintf("%s\n", s);
+    end
+end
+
+function U = keepInRange(V, jj, min_, max_, fn)
+    % We try to change vector values so that all stay in the range [min,max]
+    % However, we may get scenarios when this is impossible of takes
+    % too many trial to complete
+
+    maxTrialCount = 20;
+
+    while maxTrialCount > 0
+        U = fn(V,jj);
+        if (all(U >= min_)) && (all(U <= max_))
+            break;
+        end
+
+        A = U;
+        if size(A,1) > 1
+            A = U';
+        end
+        fprintf("Rejected: [%d] %s\n", jj, num2str(A," %.1f"));
+
+        maxTrialCount = maxTrialCount - 1;
+    end
+
+    if maxTrialCount == 0
+        min_ = round(min_);
+        max_ = round(max_);
+        U = randi([min_,max_],size(U));
+        fprintf("Failed to force the vector to stay within the limits\n");
     end
 end
