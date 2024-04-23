@@ -461,18 +461,22 @@ function V = limitVectors(V, limits)
     [n,np] = size(V);
     if n == 2
         for jj = 1:np
-            a = atan2(V(2,jj),V(1,jj));
-            lf = [limits(1) * cos(a); limits(2) * sin(a)];
-            V(:,jj) = min(lf,V(:,jj));
+            if (V(1,jj) > 0) && (V(2,jj) > 0)
+                a = atan2(V(2,jj),V(1,jj));
+                lf = [limits(1) * cos(a); limits(2) * sin(a)];
+                V(:,jj) = min(lf,V(:,jj));
+            end
         end
     elseif n == 3
         for jj = 1:np
-            a = atan2(V(2,jj),V(1,jj));
-            b = atan2(V(3,jj),V(1,jj));
-            lf = [limits(1) * cos(a) * cos(b); ...
-                  limits(2) * sin(a); ...
-                  limits(3) * sin(b)];
-            V(:,jj) = min(lf,V(:,jj));
+            if (V(1,jj) > 0) && (V(2,jj) > 0) && (V(3,jj) > 0)
+                a = atan2(V(2,jj),V(1,jj));
+                b = atan2(V(3,jj),V(1,jj));
+                lf = [limits(1) * cos(a) * cos(b); ...
+                      limits(2) * sin(a); ...
+                      limits(3) * sin(b)];
+                V(:,jj) = min(lf,V(:,jj));
+            end
         end
     end
 end
