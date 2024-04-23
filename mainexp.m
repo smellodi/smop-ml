@@ -62,11 +62,11 @@ function mainexp(varargin)
     % Size of a vector (number of chemicals)
     gas.n = smopClient.getChannelCount(1);
     
-    fprintf("%-20s n = %d, min = %d ccm, max = %d ccm\n", ...
+    fprintf("%-20s n = %d, min = %d nccm, max = %d nccm\n", ...
         "Gas parameters:", gas.n, gas.min, gas.max);
     fprintf("%-20s name = %s, cr = %.2f, f = %.2f\n", ...
         "Alg parameters:", args.alg, args.cr, args.f);
-    fprintf("%-20s mi = %d, th = %.2f\n", ...
+    fprintf("%-20s cycles = %d, threshold = %.2f\n", ...
         "Search parameters:", args.mi, args.th);
 
     % Randomization offset. This is max offset applied to the originally 
@@ -185,7 +185,7 @@ function mainexp(varargin)
         U = limitVectors(U,gas.limits);      % avoid oversaturation
         U = roundTo(U,args.dec);             % round flow values
 
-        fprintf("Flows to test:\n%s", formatVectorsAll(gas.names,U));
+        fprintf("Vectors to test:\n%s", formatVectorsAll(gas.names,U));
         clear V;
         
         %% STEP 5b: Selecting better vectors
@@ -262,7 +262,7 @@ function mainexp(varargin)
             fprintf("\n%s:\n", recipeName);
         elseif (iter >= args.mi)
             isFinished = true;
-            recipeName = sprintf("Best after %d iterations", args.mi);
+            recipeName = sprintf("The best vectors after %d iterations", args.mi);
             fprintf("\n%s:\n", recipeName);
         end
     
@@ -274,7 +274,7 @@ function mainexp(varargin)
                 formatVector(gas.names,F,gmId), gm);
             clear recipeName recipeVector;
         else
-            fprintf("Continuing the search, best vectors are:\n%s", ...
+            fprintf("The best vectors are:\n%s", ...
                 formatVectorsAll(gas.names,X));
         end
         
@@ -414,7 +414,7 @@ function V = validate(V, delta, min_, max_)
                 prev = V(:,kk);
                 V(:,kk) = keepInRange(V,kk,min_,max_, ...
                     @(Xa,kk) Xa(:,kk) + randi(interval,n,1));
-                fprintf("Validation: [%d] '%s' >> '%s'\n", ...
+                fprintf("Validator: [%d] '%s' >> '%s'\n", ...
                     kk, num2str(prev'," %.1f"), num2str(V(:,kk)'," %.1f"));
             end
         end
@@ -434,7 +434,7 @@ function V = validate(V, delta, min_, max_)
             prev = V(kk,:);
             V(kk,:) = keepInRange(V,kk,min_,max_, ...
                 @(Xa,kk) Xa(kk,:) + randi(interval,1,np));
-            fprintf("Validation: '%s' >> '%s'\n", ...
+            fprintf("Validator: '%s' >> '%s'\n", ...
                 num2str(prev," %.1f"), num2str(V(kk,:)," %.1f"));
         end
     end
@@ -546,6 +546,7 @@ function U = keepInRange(V, jj, min_, max_, fn)
         min_ = round(min_);
         max_ = round(max_);
         U = randi([min_,max_],size(U));
-        fprintf("Failed to force the vector to stay within the limits\n");
+        fprintf("[%d] Failed to create a vector within the limits. " + ...
+            "A random vector is generated instead.\n", jj);
     end
 end
