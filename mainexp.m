@@ -1,13 +1,21 @@
 % The ML process using DIFFERENTIAL EVOLUTION algorithm
-% Few alternative implemenations
+% Same as main.m, but with few alternative solutions:
+% - initial vectors are not the corners of the search space,
+%       (see createInitialVectors)
+% - the search space is extended by 5% relative to the valid flow range,
+%       (see mutate)
+% - DMS/SNT measurement is requested for all vectors, even for those that 
+%   were measured already,
+% - dublicated vectors are not allowed: copies are replaced by vectors with
+%   values shifted by [-20%..20%]. 
+%       (see validate)
+% - iteration trial vectors with same values for a single gas are not 
+%   allowed: all values are shifted by [-20%..20%].
+%       (see validate)
 
 %% NOTES
 %
-% IF WE WANT TO INCLUDE PID, THEN THE WHOLE SYSTEM NEEDS TO BE REDESIGNED
-%
-% Philipp Muller, January 2024  
-%
-% IMPORTANT: Recipe name is parsed in the SMOP app, so do not change the
+% Recipe name is parsed in the SMOP app, so do not change the
 % way it is constructed in this script.
 %
 % Oleg Spakov, March 2024
@@ -112,9 +120,8 @@ function mainexp(varargin)
 
     %% STEP 4: Initialization
     
-    % Start without any prior information.
-    
-    %% STEP 4a: Init vectors and consts
+    %% STEP 4a: Create initial vectors
+
     % All measured vectors (flow rates)
     F = createInitialVectors(gas.n,gas.min,gas.max);
 
@@ -130,7 +137,7 @@ function mainexp(varargin)
     
     XI = 1:size(X,2); % range of X and U
     
-    %% STEP 4b: Collect measurements
+    %% STEP 4b: Collect initial measurements
 
     % All measurements
     M = arrayfun(@(x)struct("dms",0,"snt",0),XI);
@@ -161,7 +168,7 @@ function mainexp(varargin)
 
     fprintf("GM: %.4f [%s]\n", gm, formatVector(gas.names,F,gmId));
     
-    %% STEP 5: Iterative step
+    %% STEP 5: Iteration
 
     iter = 1;   % iteration counter
     MI = XI;    % indexes of M corresponding to vectors consisting X
@@ -178,10 +185,8 @@ function mainexp(varargin)
         % [https://en.wikipedia.org/wiki/Differential_evolution]
 
         V = mutate(X,args.f,gas.min,gas.max);   % generate new vectors
-        %V = limitValues(V,gas.min,gas.max);    % limit their values 
         U = crossover(X,V,args.cr);             % mix old and new vectors
         U = validate(U,gas.df,gas.min,gas.max); % remove repetitions
-        %U = limitValues(U,gas.min,gas.max);  % limit values after rndmzation
         U = limitVectors(U,gas.limits);      % avoid oversaturation
         U = roundTo(U,args.dec);             % round flow values
 
