@@ -32,4 +32,5 @@ octave-workspace
 
 # Custom
 bin/
+data/
 *_resources/
