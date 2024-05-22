@@ -1,10 +1,12 @@
-% Compares two DMS measurements
+% Compares pairs of DMS measurements
+% Should be used with data collected earlier and saved in JSON files, or
+% for comparing any two DMS measurements save in files.
 
 %% APP ENTRY
 function cmp(varargin)
 
     args = argparser(varargin,nargin);
-    if args.isInfo
+    if size(args) == 0
         return
     end
     
@@ -126,7 +128,7 @@ function dict = argparser(args, n)
         "isInfo", false ...
     );
 
-    function print()
+    if n == 0
         fprintf("===============================\n");
         fprintf("SMOP DMS comparison tool.\n");
         fprintf("===============================\n");
@@ -147,11 +149,8 @@ function dict = argparser(args, n)
         fprintf("Example:\n");
         fprintf("    cmp 1.json 2.json\n");
         fprintf("    cmp folder=6_heatup_PID action=6ipa\n");
-    end
 
-    if n == 0
-        print();
-        dict.isInfo = true;
+        dict = {};
         return
     end
 

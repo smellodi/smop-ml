@@ -15,6 +15,9 @@
 %% APP ENTRY
 function main(varargin)
     args = argparser(varargin,nargin);
+    if size(args) == 0
+        return
+    end
 
     % dbstop error
     % rng("shuffle")

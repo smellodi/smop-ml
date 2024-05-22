@@ -11,6 +11,9 @@
 %% APP ENTRY
 function exprm(varargin)
     args = argparser(varargin,nargin);
+    if size(args) == 0
+        return
+    end
 
     %% STEP 1: Init consts
 
@@ -236,31 +239,35 @@ function dict = argparser(args, n)
         "alg", algorithms(1) ...
     );
 
-    fprintf("===============================\n");
-    fprintf("SMOP Machine Learning back-end.\n");
-    fprintf("Flow test routine\n");
-    fprintf("===============================\n");
-    fprintf("\n");
-    fprintf("Usage:\n");
-    fprintf("  exprm [<arg>=<value>]\n\n");
-    fprintf("<arg> can be one of the following:\n");
-    fprintf("    ip [str]      IP of SMOP UI app (default is %s)\n", dict.ip);
-    fprintf("    mode [int]    1: distractors + test flow, " + ...
-            "                  2: PID level test " + ...
-            "                  3: RMSE dependency on a flow offset" + ...
-            "                  4: Weak flow multiple times (heating up)" + ...
-            "                     (default is %d)\n", dict.mode);
-    fprintf("    arg [int]     Depends on the mode:\n" + ...
-            "                  1: flow pair index, 1-10 " + ...
-            "                  3: test channel, 1/2 " + ...
-            "                  2, 4: ignored " + ...
-            "                     (default is %d)\n", dict.arg);
-    fprintf("    alg [str]     algorithm to use (default is '%s')\n", dict.alg);
-    fprintf("                      available values: [%s]\n", join(algorithms,", "));
-    fprintf("\n");
-    fprintf("Example:\n");
-    fprintf("    exprm mode=1 arg=2\n");
-    fprintf("\n\n");
+    if n == 0
+        fprintf("===============================\n");
+        fprintf("SMOP Machine Learning back-end.\n");
+        fprintf("Flow test routine\n");
+        fprintf("===============================\n");
+        fprintf("\n");
+        fprintf("Usage:\n");
+        fprintf("  exprm [<arg>=<value>]\n\n");
+        fprintf("<arg> can be one of the following:\n");
+        fprintf("    ip [str]      IP of SMOP UI app (default is %s)\n", dict.ip);
+        fprintf("    mode [int]    1: distractors + test flow, " + ...
+                "                  2: PID level test " + ...
+                "                  3: RMSE dependency on a flow offset" + ...
+                "                  4: Weak flow multiple times (heating up)" + ...
+                "                     (default is %d)\n", dict.mode);
+        fprintf("    arg [int]     Depends on the mode:\n" + ...
+                "                  1: flow pair index, 1-10 " + ...
+                "                  3: test channel, 1/2 " + ...
+                "                  2, 4: ignored " + ...
+                "                     (default is %d)\n", dict.arg);
+        fprintf("    alg [str]     algorithm to use (default is '%s')\n", dict.alg);
+        fprintf("                      available values: [%s]\n", join(algorithms,", "));
+        fprintf("\n");
+        fprintf("Example:\n");
+        fprintf("    exprm mode=1 arg=2\n");
+
+        dict = {};
+        return
+    end
 
     for jj = 1:n
         p = split(string(args(jj)),"=");
