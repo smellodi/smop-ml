@@ -1,19 +1,29 @@
 % The ML process using DIFFERENTIAL EVOLUTION algorithm
-% Described in Mariaana's manuscript.
+%
+% Developed from _legacy_main.m and has few alternative solutions:
+% - initial vectors are not the corners of the search space,
+%       (see createInitialVectors)
+% - the search space is extended by 5% relative to the valid flow range,
+%       (see mutate)
+% - DMS/SNT measurement is requested for all vectors, even for those that 
+%       were measured already,
+% - dublicated vectors are not allowed: copies are replaced by vectors with
+%       values shifted by [-20%..20%]. 
+%       (see validate)
+% - iteration trial vectors with same values for a single gas are not 
+%       allowed: all values are shifted by [-20%..20%].
+%       (see validate)
 
 %% NOTES
 %
-% IF WE WANT TO INCLUDE PID, THEN THE WHOLE SYSTEM NEEDS TO BE REDESIGNED
-%
-% Philipp Muller, January 2024  
-%
-% IMPORTANT: Recipe name is parsed in the SMOP app, so do not change the
+% Recipe name is parsed in the SMOP app, do not change the
 % way it is constructed in this script.
 %
 % Oleg Spakov, March 2024
 
 %% APP ENTRY
 function main(varargin)
+
     args = argparser(varargin,nargin);
     if size(args) == 0
         return
@@ -64,11 +74,11 @@ function main(varargin)
     % Size of a vector (number of chemicals)
     gas.n = smopClient.getChannelCount(1);
     
-    fprintf("%-20s n = %d, min = %d ccm, max = %d ccm\n", ...
+    fprintf("%-20s n = %d, min = %d nccm, max = %d nccm\n", ...
         "Gas parameters:", gas.n, gas.min, gas.max);
     fprintf("%-20s name = %s, cr = %.2f, f = %.2f\n", ...
         "Alg parameters:", args.alg, args.cr, args.f);
-    fprintf("%-20s mi = %d, th = %.2f\n", ...
+    fprintf("%-20s cycles = %d, threshold = %.2f\n", ...
         "Search parameters:", args.mi, args.th);
 
     % Randomization offset. This is max offset applied to the originally 
@@ -114,9 +124,8 @@ function main(varargin)
 
     %% STEP 4: Initialization
     
-    % Start without any prior information.
-    
-    %% STEP 4a: Init vectors and consts
+    %% STEP 4a: Create initial vectors
+
     % All measured vectors (flow rates)
     F = createInitialVectors(gas.n,gas.min,gas.max);
 
@@ -132,7 +141,7 @@ function main(varargin)
     
     XI = 1:size(X,2); % range of X and U
     
-    %% STEP 4b: Collect measurements
+    %% STEP 4b: Collect initial measurements
 
     % All measurements
     M = arrayfun(@(x)struct("dms",0,"snt",0),XI);
@@ -163,7 +172,7 @@ function main(varargin)
 
     fprintf("GM: %.4f [%s]\n", gm, formatVector(gas.names,F,gmId));
     
-    %% STEP 5: Iterative step
+    %% STEP 5: Iteration
 
     iter = 1;   % iteration counter
     MI = XI;    % indexes of M corresponding to vectors consisting X
@@ -179,15 +188,13 @@ function main(varargin)
         %% STEP 5a: Differential evolution
         % [https://en.wikipedia.org/wiki/Differential_evolution]
 
-        V = mutate(X,args.f);               % generate new vectors
-        V = limitValues(V,gas.min,gas.max); % limit their values 
-        U = crossover(X,V,args.cr);         % mix old and new vectors
-        U = validate(U,gas.df);             % remove repetitions
-        U = limitValues(U,gas.min,gas.max); % limit values after rndmzation
-        U = limitVectors(U,gas.limits);     % avoid oversaturation
-        U = roundTo(U,args.dec);            % round flow values
+        V = mutate(X,args.f,gas.min,gas.max);   % generate new vectors
+        U = crossover(X,V,args.cr);             % mix old and new vectors
+        U = validate(U,gas.df,gas.min,gas.max); % remove repetitions
+        U = limitVectors(U,gas.limits);      % avoid oversaturation
+        U = roundTo(U,args.dec);             % round flow values
 
-        fprintf("Flows to test:\n%s", formatVectorsAll(gas.names,U));
+        fprintf("Vectors to test:\n%s", formatVectorsAll(gas.names,U));
         clear V;
         
         %% STEP 5b: Selecting better vectors
@@ -202,38 +209,26 @@ function main(varargin)
 
             %% STEP 5b2: Compute distance of TRIAL vector
     
-            % Find shuffled intertersection of indexes for which F and U
-            % have same flow rates
-            C = getCommonIndices(F,U,jj);
-    
-            if ~isempty(C)  % a measurement of this vector exists
-                kk = C(1);  % already, lets take it from the database M
-                fprintf("[%d] REPEAT  %s", jj, formatVector(gas.names,F,kk));
-            else
-                pause(0.1);     % emulate some heavy ML search :)
-    
-                % This vector was not measured yet, so lets do it
-                recipeName = sprintf("Iteration #%d, Search #%d", iter, jj); 
-                smopClient.sendRecipe(recipeName,U(:,jj),isFinished,cfm);
-                clear recipeName;
-    
-                % Wait for new measurement and add it to the table of 
-                % measured recipes
-                fprintf("[%d] MEASURE %s", jj, formatVector(gas.names,U,jj));
-                kk = length(M) + 1;
-                M(kk) = getMeasurement(smopClient);
-                F(:,kk) = U(:,jj);
-            end
+            pause(0.1);     % emulate some heavy ML search :)
+
+            % This vector was not measured yet, so lets do it
+            recipeName = sprintf("Iteration #%d, Search #%d", iter, jj); 
+            recipeVector = limitValues(U(:,jj),gas.min,gas.max);
+            smopClient.sendRecipe(recipeName,recipeVector,isFinished,cfm);
+            clear recipeName recipeVector;
+
+            % Wait for new measurement and add it to the table of 
+            % measured recipes
+            fprintf("[%d] %s", jj, formatVector(gas.names,U,jj));
+            kk = length(M) + 1;
+            M(kk) = getMeasurement(smopClient);
+            F(:,kk) = U(:,jj);
 
             cfU = getSimilarityMeasure(args.alg,initM,M(kk));
             fprintf(" DIST=%6.3f", cfU);
 
-            if isempty(C)   % memorize cf of measured data for recipe
-                cfm = cfU;
-            end
+            cfm = cfU;
 
-            clear C;
-            
             %% STEP 5b3: update distance minimas
 
             cf = min(cfU,cfX);
@@ -276,19 +271,19 @@ function main(varargin)
             fprintf("\n%s:\n", recipeName);
         elseif (iter >= args.mi)
             isFinished = true;
-            recipeName = sprintf("Best after %d iterations", args.mi);
+            recipeName = sprintf("The best vectors after %d iterations", args.mi);
             fprintf("\n%s:\n", recipeName);
         end
     
         if isFinished
             % Send the final recipe
-            flows = F(:,gmId);
-            smopClient.sendRecipe(recipeName, flows, isFinished, cfm);
+            recipeVector = limitValues(F(:,gmId),gas.min,gas.max);
+            smopClient.sendRecipe(recipeName, recipeVector, isFinished, cfm);
             fprintf("  %s, DIST = %.4f\n\nFinished\n\n", ...
                 formatVector(gas.names,F,gmId), gm);
-            clear recipeName flows;
+            clear recipeName recipeVector;
         else
-            fprintf("Continuing the search, best vectors are:\n%s", ...
+            fprintf("The best vectors are:\n%s", ...
                 formatVectorsAll(gas.names,X));
         end
         
@@ -321,41 +316,28 @@ end
 % combinations of min_ and max_, plus the vector with central values.
 function F = createInitialVectors(n, min_, max_)
     V = [];
+
+    interval = max_ - min_;
+    center = (max_ + min_) / 2;
+
+    min_ = min_ + interval * 0.12;
+    max_ = max_ - interval * 0.08;   % different delta to add some imbalance
+    
     for jj = n:-1:0
-        a = repmat(min_,1,jj);      % [0, 0, ...  (or empty list if jj == 0)
-        b = repmat(max_,1,n-jj);    % ... 50, 50] (or empty list if jj == n)
+        a = repmat(min_,1,jj);      % [min, min, ...  (or nothing if jj == 0)
+        b = repmat(max_,1,n-jj);    % ... max, max] (or nothing if jj == n)
         U = [a b];                  % unite both parts
         U = perms(U);               % save all permutations as rows
         V = [V;U];                  % add to the resulting list
     end
+    
     V = unique(V,"rows")';          % remove duplications produced by
                                     % permutations, and transpose the matrix
-    center = (max_ + min_) / 2;
     F = [V repmat(center,n,1)];     % add central point
 
-    while size(F) < 4               % in case n = 1 that gives only 3 points
-        F = [F randi(max_)];        % add a random point
+    while size(F) < 4               % in case n = 1 that gives only 3 values
+        F = [F randi([min_,max_])]; % add a random value
     end
-end
-
-% Finds common indices and returns a permutated array of them.
-function M = getCommonIndices(V, U, ucol)
-    [n,c] = size(V);
-
-    % The initial intersection array stores all indices
-    M = 1:c;
-
-    % Find indices of samples for which V and U have same flow rates
-    for jj = 1:n
-        ID = find(V(jj,:) == U(jj,ucol));
-        M = intersect(ID,M);
-        if isempty(M)
-            return      % the result is empty, no need to continue
-        end
-    end
-    
-    % Shuffle the resulting array in random order
-    M = M(randperm(numel(M)));
 end
 
 % A cost function that measures similarity (distance) between dispersion plot 
@@ -377,22 +359,32 @@ function distance = getSimilarityMeasure(alg, measrm1, measrm2)
 end
 
 % Mutation
-function V = mutate(X, f)
+function V = mutate(X, f, min_, max_)
     [n,np] = size(X);
     V = nan(n,np);
 
-    for jj = 1:np
-        % Pick three distinct vectors from X that are different from jj
-        ids = randperm(np);    % random permutation of integers 1 to np
-        ids(ids == jj) = [];   % remove integer jj
-        
-        % Compute donor vector from first three vectors
-        % pick three distinct dispersion plots (also PID, SNT) 
-        % (need to be distinct from each other and from x)
-        value = X(:,ids(1)) + f * (X(:,ids(2)) - X(:,ids(3)));
+    % Allow to accept mutated vectors with values slightly beyond the
+    % limits. The values anyway will be adjusted to bring them within 
+    % the scope in the limitValues function
 
-        V(:,jj) = value;
+    delta = (max_ - min_) * 0.05;   % 5% to each side beyond the limits
+    min_ = min_ - delta;
+    max_ = max_ + delta;
+
+    for jj = 1:np
+        V(:,jj) = keepInRange(X,jj,min_,max_,@(Xa,kk) mutateOne(Xa,f,kk));
     end
+end
+
+function U = mutateOne(X, f, jj)
+    % Pick three distinct vectors from X that are different from jj
+    ids = randperm(size(X,2));  % random permutation of integers 1 to np
+    ids(ids == jj) = [];        % remove integer jj
+
+    % Compute donor vector from first three vectors
+    % pick three distinct dispersion plots (also PID, SNT) 
+    % (need to be distinct from each other and from x)
+    U = X(:,ids(1)) + f * (X(:,ids(2)) - X(:,ids(3)));
 end
 
 % Uses binomial method for combining components from target and donor vectors
@@ -420,7 +412,7 @@ function U = crossover(X, V, cr)
 end
 
 % Avoid the search algorithm to stuck with testing same or similar vectors
-function V = validate(V, delta)
+function V = validate(V, delta, min_, max_)
     [n,np] = size(V);
     interval = [-delta, delta];
 
@@ -428,7 +420,11 @@ function V = validate(V, delta)
     for jj = 2:np
         for kk = 1:(jj-1)
             if V(:,jj) == V(:,kk)
-                V(:,kk) = V(:,kk) + randi(interval,n,1);
+                prev = V(:,kk);
+                V(:,kk) = keepInRange(V,kk,min_,max_, ...
+                    @(Xa,kk) Xa(:,kk) + randi(interval,n,1));
+                fprintf("Validator: [%d] '%s' >> '%s'\n", ...
+                    kk, num2str(prev'," %.1f"), num2str(V(:,kk)'," %.1f"));
             end
         end
     end
@@ -444,7 +440,11 @@ function V = validate(V, delta)
     % .. then randomize those values a bit
     for kk = 1:n
         if allSame(kk)
-            V(kk,:) = V(kk,:) + randi(interval,1,np);
+            prev = V(kk,:);
+            V(kk,:) = keepInRange(V,kk,min_,max_, ...
+                @(Xa,kk) Xa(kk,:) + randi(interval,1,np));
+            fprintf("Validator: '%s' >> '%s'\n", ...
+                num2str(prev," %.1f"), num2str(V(kk,:)," %.1f"));
         end
     end
 end
@@ -526,5 +526,36 @@ function s = formatVectorsAll(N, V)
             s = sprintf("%s %4.1f", s, V(jj,kk));
         end
         s = sprintf("%s\n", s);
+    end
+end
+
+function U = keepInRange(V, jj, min_, max_, fn)
+    % We try to change vector values so that all stay in the range [min,max]
+    % However, we may get scenarios when this is impossible or takes
+    % too many trials to complete
+
+    maxTrialCount = 20;
+
+    while maxTrialCount > 0
+        U = fn(V,jj);
+        if (all(U >= min_)) && (all(U <= max_))
+            break;
+        end
+
+        A = U;
+        if size(A,1) > 1
+            A = U';
+        end
+        fprintf("Rejected: [%d] %s\n", jj, num2str(A," %.1f"));
+
+        maxTrialCount = maxTrialCount - 1;
+    end
+
+    if maxTrialCount == 0
+        min_ = round(min_);
+        max_ = round(max_);
+        U = randi([min_,max_],size(U));
+        fprintf("[%d] Failed to create a vector within the limits. " + ...
+            "A random vector is generated instead.\n", jj);
     end
 end
