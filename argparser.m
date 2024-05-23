@@ -19,46 +19,42 @@ function dict = argparser(args, n)
         "cr", 0.7, ...
         "f", 0.8, ...
         "dec", 0, ...
-        "mi", 8, ...
+        "mi", 10, ...
         "th", 0.5, ...
         "alg", algorithms(1) ...
     );
-
-    if n == 0
-        fprintf("===============================\n");
-        fprintf("SMOP Machine Learning back-end.\n");
-        fprintf("===============================\n");
-        fprintf("\n");
-        fprintf("Usage:\n");
-        fprintf("  smop_ml [<arg>=<value>]\n\n");
-        fprintf("<arg> can be one of the following:\n");
-        fprintf("    ip [str]      IP of SMOP UI app (default is %s)\n", dict.ip);
-        fprintf("    cr [double]   crossover population (default is %.2f)\n", dict.cr);
-        fprintf("    f  [double]   differential weight(default is %.2f)\n", dict.f);
-        fprintf("    dec [int]     decimals left after rounding generated flows" + ...
-            " (default is %d)\n", dict.dec);
-        fprintf("                      note that negative values round flows " + ...
-            "to be divisible by |dec|+1\n");
-        fprintf("                      (thus, dec=-1 makes flow values to be even\n");
-        fprintf("    mi [int]      max iteration count (default is %d)\n", dict.mi);
-        fprintf("    th [double]   proximity threshold (default is %.2f)\n", dict.th);
-        fprintf("    alg [str]     algorithm to use (default is '%s')\n", dict.alg);
-        fprintf("                      available values: [%s]\n", join(algorithms,", "));
-        fprintf("\n");
-        fprintf("Example:\n");
-        fprintf("    smop_ml ip=192.168.1.4 cr=0.9 f=0.6 mi=12 dec=-1\n");
-
-        dict = {};
-        return
-    end
 
     for jj = 1:n
         p = split(string(args(jj)),"=");
         wasParsed = true;
 
         if (length(p) == 1)    % parse flags as boolean values set to "true"
-            if strcmpi(p(1), "-")
-                % no such parameters yet, the comparison above is a dummy
+            if strcmpi(p(1), "help")
+                fprintf("===============================\n");
+                fprintf("SMOP Machine Learning back-end.\n");
+                fprintf("===============================\n");
+                fprintf("\n");
+                fprintf("Usage:\n");
+                fprintf("  smop_ml [<arg>=<value>]\n\n");
+                fprintf("<arg> can be one of the following:\n");
+                fprintf("    ip [str]      IP of SMOP UI app (default is %s)\n", dict.ip);
+                fprintf("    cr [double]   crossover population (default is %.2f)\n", dict.cr);
+                fprintf("    f  [double]   differential weight(default is %.2f)\n", dict.f);
+                fprintf("    dec [int]     decimals left after rounding generated flows" + ...
+                    " (default is %d)\n", dict.dec);
+                fprintf("                      note that negative values round flows " + ...
+                    "to be divisible by |dec|+1\n");
+                fprintf("                      (thus, dec=-1 makes flow values to be even\n");
+                fprintf("    mi [int]      max iteration count (default is %d)\n", dict.mi);
+                fprintf("    th [double]   proximity threshold (default is %.2f)\n", dict.th);
+                fprintf("    alg [str]     algorithm to use (default is '%s')\n", dict.alg);
+                fprintf("                      available values: [%s]\n", join(algorithms,", "));
+                fprintf("\n");
+                fprintf("Example:\n");
+                fprintf("    smop_ml ip=192.168.1.4 cr=0.9 f=0.6 mi=12 dec=-1\n");
+        
+                dict = {};
+                return
             else
                 wasParsed = false;
             end
@@ -105,4 +101,6 @@ function dict = argparser(args, n)
             fprintf("Unknown parameter '%s'\n", p(1));
         end
     end
+
+    fprintf("Run the script with 'help' argument to see the available parameters\n");
 end

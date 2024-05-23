@@ -123,7 +123,7 @@ function dict = argparser(args, n)
         "fn1", '', ...
         "fn2", '', ...
         "folder", "data", ...
-        "action", actions(1), ...
+        "action", '', ...
         "alg", algorithms(1), ...
         "isInfo", false ...
     );
@@ -137,7 +137,7 @@ function dict = argparser(args, n)
         fprintf("  cmp [<arg>=<value>]\n\n");
         fprintf("<arg> can be one of the following:\n");
         fprintf("    folder [str]  DMS folder (default is '%s')\n", dict.folder);
-        fprintf("    action [str]  action to perform (default is '%s')\n", dict.action);
+        fprintf("    action [str]  (required) action to perform\n");
         fprintf("                      available values: [%s]\n", join(actions,", "));
         fprintf("    fn1 [str]     DMS filename #1, 'fn1=' can be omitted\n");
         fprintf("                      used only in action '%s'\n", actions(1));
@@ -147,8 +147,8 @@ function dict = argparser(args, n)
         fprintf("                      available values: [%s]\n", join(algorithms,", "));
         fprintf("\n");
         fprintf("Example:\n");
-        fprintf("    cmp 1.json 2.json\n");
-        fprintf("    cmp folder=6_heatup_PID action=6ipa\n");
+        fprintf("    cmp action=2cmp 1.json 2.json\n");
+        fprintf("    cmp action=6ipa folder=6_heatup_PID\n");
 
         dict = {};
         return
