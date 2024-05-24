@@ -1,6 +1,6 @@
 % Compares pairs of DMS measurements
-% Should be used with data collected earlier and saved in JSON files, or
-% for comparing any two DMS measurements save in files.
+% Should be used with data collected earlier and saved in JSON files, 
+% or for comparing any two DMS measurements save in files.
 
 %% APP ENTRY
 function cmp(varargin)
@@ -9,65 +9,65 @@ function cmp(varargin)
     if size(args) == 0
         return
     end
+    args.folder = args.folder + "/";
     
     if args.action == "2cmp"
-        files = [args.folder + "/" + args.fn1 ...
-                 args.folder + "/" + args.fn2]';
+        files = [args.folder + args.fn1 ...
+                 args.folder + args.fn2]';
     elseif strncmp(args.action, "5", 1)
-        files = dir(args.folder + "/*.json");
-        files = [ files(2) ...
-            files(3) files(5) files(7) files(9) files(11) ...
-            files(13) files(15) files(17) files(19) files(21) files(22) ...
-            files(23) files(25) files(27) files(29) files(31) ...
-            files(33) files(35) files(37) files(39) files(41) files(42) ...
-            files(43) files(45) files(47) files(49) files(51) ...
-            files(53) files(55) files(57) files(59) files(61) files(62) ...
-        ]';
-        files = arrayfun(@(x) args.folder + "/" + x.name,files);
-    elseif strncmp(args.action, "6", 1)
-        files = dir(args.folder + "/*.json");
-        if args.action == "6ipa"
-            files = [
-                files(2) files(3) files(4) files(8) files(10) files(12) ...
-                files(14) files(15) files(16) files(20) files(22) files(24) ...
-                files(26) files(27) files(28) files(32) files(34) files(36) ...
-            ]';
-        else
-            files = [
-                files(5) files(6) files(7) files(9) files(11) files(13) ...
-                files(17) files(18) files(19) files(21) files(23) files(25) ...
-                files(29) files(30) files(31) files(33) files(35) files(37) ...
-            ]';
+        range = [2 3 5 7 9 11 13 15 17 19 21 22 23 25 27 29 31 33 35 ...
+                 37 39 41 42 43 45 47 49 51 53 55 57 59 61 62]';
+        files = dir(args.folder + "*.json");
+        try
+            files = arrayfun(@(x) args.folder + files(x).name,range);
+        catch
+            fprintf("Not enough files for this action");
+            return
         end
-        files = arrayfun(@(x) args.folder + "/" + x.name,files);
+    elseif strncmp(args.action, "6", 1)
+        if args.action == "6ipa"
+            range = [2 3 4 8 10 12 14 15 16 20 22 24 26 27 28 32 34 36]';
+        else
+            range = [5 6 7 9 11 13 17 18 19 21 23 25 29 30 31 33 35 37]';
+        end
+        files = dir(args.folder + "*.json");
+        try
+            files = arrayfun(@(x) args.folder + files(x).name,range);
+        catch
+            fprintf("Not enough files for this action");
+            return
+        end
     end
 
     if args.action == "5fst"    % comparison against the first DMS
         dms1 = readDms(files(1));
         for jj = 2:size(files)
             dms2 = readDms(files(jj));
-            if ~dms1 || ~dms2
+            if (size(dms1,1) <= 1) || (size(dms2,1) <= 1)
                 continue
             end
             cfm = getSimilarityMeasure(args.alg,dms1,dms2);
             fprintf("%.3f\n", cfm);
         end
     else                        % sequential comparison
+        dms1 = readDms(files(1));
         for jj = 2:size(files)
-            dms1 = readDms(files(jj-1));
             dms2 = readDms(files(jj));
-            if ~dms1 || ~dms2
+            if (size(dms1,1) <= 1) || (size(dms2,1) <= 1)
                 continue
             end
             cfm = getSimilarityMeasure(args.alg,dms1,dms2);
             fprintf("%.3f\n", cfm);
+
+            dms1 = dms2;
         end
     end
 end
 
 %%% FUNCTIONS
 
-% Read IonVision data file, returns positive DMS data
+% Reads IonVision data file, returns positive DMS data
+% or 0, if cannot read file or the file is corrupted, etc.
 function dms = readDms(filename)
     try
         text = fileread(filename);

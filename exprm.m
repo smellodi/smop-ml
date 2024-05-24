@@ -5,8 +5,8 @@
 % 3 - measure RMSE for various offsets (rough)
 %       use arg param to set the test channel/odor
 % 4 - measure RMSE for various offsets (fine)
-%       use arg param to set the target flow
 % 5 - heating up the system by repeating weak flow multiple times
+%       use arg param to set the target flow (same for both channels)
 
 %% APP ENTRY
 function exprm(varargin)
@@ -56,8 +56,8 @@ function exprm(varargin)
         flow1 = 5; % 5 15 25 35 45
         flow2 = 0; % 0 10 20 30 40 50
         channel = 2;
-        F(1,:) = [0];
-        F(2,:) = [0];
+        F(1,:) = 0;
+        F(2,:) = 0;
         id = 1;
         for jj = -18:3:18
             flow = flow1 + jj;
@@ -257,10 +257,9 @@ function dict = argparser(args, n)
         fprintf("                  5: 100 pulses of a mixture of the same flow rates \n");
         fprintf("    arg [int]     an argument depending on the mode:\n");
         fprintf("                  mode=1: flow pair index, 1-10\n");
-        fprintf("                  mode=3: test channel, 1/2\n");
-        fprintf("                  mode=5: flow rate for both channels (>= 5sccm)\n");
         fprintf("                  mode=2,4: ignored\n");
-        fprintf("                     (default is %d)\n", dict.arg);
+        fprintf("                  mode=3: test channel, 1/2\n");
+        fprintf("                  mode=5: flow rate, >=5sccm (same for both channels)\n");
         fprintf("    alg [str]     algorithm to use (default is '%s')\n", dict.alg);
         fprintf("                      available values: [%s]\n", join(algorithms,", "));
         fprintf("\n");
