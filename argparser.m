@@ -1,12 +1,20 @@
 function dict = argparser(args, n)
     algorithms = [
         % implemented
-        "euclidean"     % uses Euclidean distance between two matrices
+        "default"     % computes Euclidean distance between two matrices
+
+        % pdist2 implementations
+        "euclidean",
+        "cityblock",
+        "chebychev",
+        "cosine",
+        "correlation",
+        "spearman",
 
         % the rest are not implemented
         "alpha"         % extracts alpha curves or dispersion plots using 
                         %   Anton's algorithm (ISOEN paper) and computes 
-                        %   Euclidean distance between thealpha curve locations
+                        %   Euclidean distance between the alpha curve locations
         "frobenius"     % Frobenius norm
         "cos"           % Cosine similarity
         "stat"          % stat tests on diff between generated and original odors?

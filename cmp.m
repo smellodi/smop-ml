@@ -82,11 +82,11 @@ end
 % A cost function that measures similarity (distance) between dispersion plot 
 % of the mixture we want to recreate and the training dispesion plot. 
 function distance = getSimilarityMeasure(alg, dms1, dms2)
-    distance = 1e8;
-
     if (alg == "euclidean")
         % For Euclidean algorithm we use RMSE as the distance.
         distance = sqrt(mean((dms1 - dms2).^2));
+    else
+        distance = pdist2(dms1',dms2',"euclidean");
     end
 end
 

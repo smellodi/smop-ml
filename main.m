@@ -345,16 +345,32 @@ end
 function distance = getSimilarityMeasure(alg, measrm1, measrm2)
     distance = 1e8;
 
-    if (alg == "euclidean")
-        % For Euclidean algorithm we use RMSE as the distance.
-        if ~isempty(measrm2.dms)
-            distance = sqrt(mean((measrm1.dms - measrm2.dms).^2));
-        elseif ~isempty(measrm2.snt)
-            distance = sqrt(mean((measrm1.snt - measrm2.snt).^2));
-            if distance > 10000            % huge values observed with real SNT
-                distance = distance / 100000;  % TODO: remove in future
-            end
-        end
+    if ~isempty(measrm2.dms)
+        m1 = measrm1.dms;
+        m2 = measrm2.dms;
+    elseif ~isempty(measrm2.snt)
+        m1 = measrm1.snt;
+        m2 = measrm2.snt;
+    else
+        return
+    end
+
+    if alg == "default"
+        % Point-to-point Euclidean algorithm computes RMSE
+        distance = sqrt(mean((m1 - m2).^2));
+    elseif alg == "euclidean" || ...
+           alg == "cityblock" || ... 
+           alg == "chebychev" || ...
+           alg == "cosine" || ...
+           alg == "correlation" || ...
+           alg == "spearman"
+        m1 = m1'; %reshape(m1',[],3)';
+        m2 = m2'; %reshape(m2',[],3)';
+        distance = pdist2(m1,m2,alg);
+    end
+
+    if distance > 10000            % huge values observed with real SNT
+        distance = distance / 100000;  % TODO: remove in future
     end
 end
 
