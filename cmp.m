@@ -82,18 +82,33 @@ end
 % A cost function that measures similarity (distance) between dispersion plot 
 % of the mixture we want to recreate and the training dispesion plot. 
 function distance = getSimilarityMeasure(alg, dms1, dms2)
-    if (alg == "euclidean")
+    distance = 1e8;
+
+    if (alg == "default")
         % For Euclidean algorithm we use RMSE as the distance.
         distance = sqrt(mean((dms1 - dms2).^2));
-    else
-        distance = pdist2(dms1',dms2',"euclidean");
+    elseif alg == "euclidean" || ...
+           alg == "cityblock" || ... 
+           alg == "chebychev" || ...
+           alg == "cosine" || ...
+           alg == "correlation" || ...
+           alg == "spearman"
+        distance = pdist2(dms1',dms2',alg);
     end
 end
 
 function dict = argparser(args, n)
     algorithms = [
         % implemented
-        "euclidean"     % uses Euclidean distance between two matrices
+        "default"     % computes Euclidean distance between two matrices
+
+        % pdist2 implementations
+        "euclidean",
+        "cityblock",
+        "chebychev",
+        "cosine",
+        "correlation",
+        "spearman",
 
         % the rest are not implemented
         "alpha"         % extracts alpha curves or dispersion plots using 
