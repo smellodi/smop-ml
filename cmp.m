@@ -9,6 +9,27 @@ function cmp(varargin)
     if size(args) == 0
         return
     end
+
+    folders = getFolders(args.folder);
+
+    if isempty(folders)
+        if args.action == "7cmp"
+            fprintf("Please use folder=C:\...\2_IPA argument with this action\n");
+        else
+            run(args);
+        end
+    else
+        root = args.folder;
+        for jj = 1:length(folders)
+            folder = string(folders(jj));
+            args.folder = root + "\" + folder + "\dms";
+            fprintf("\nFolder %s\n", folder);
+            run(args);
+        end
+    end
+end
+
+function run(args)
     args.folder = args.folder + "/";
     
     if args.action == "2cmp"
@@ -37,27 +58,32 @@ function cmp(varargin)
             fprintf("Not enough files for this action");
             return
         end
+    elseif args.action == "7cmp"
+        files = dir(args.folder + "*.json");
+        range = 2:length(files);
+        files = arrayfun(@(x) args.folder + files(x).name,range);
     end
 
-    if args.action == "5fst"    % comparison against the first DMS
+    if args.action == "5fst" || ...   % comparison against the first DMS
+       args.action == "7cmp"
         dms1 = readDms(files(1));
-        for jj = 2:size(files)
+        for jj = 2:length(files)
             dms2 = readDms(files(jj));
             if (size(dms1,1) <= 1) || (size(dms2,1) <= 1)
                 continue
             end
             cfm = getSimilarityMeasure(args.alg,dms1,dms2);
-            fprintf("%.3f\n", cfm);
+            fprintf("%.5f\n", cfm);
         end
     else                        % sequential comparison
         dms1 = readDms(files(1));
-        for jj = 2:size(files)
+        for jj = 2:length(files)
             dms2 = readDms(files(jj));
             if (size(dms1,1) <= 1) || (size(dms2,1) <= 1)
                 continue
             end
             cfm = getSimilarityMeasure(args.alg,dms1,dms2);
-            fprintf("%.3f\n", cfm);
+            fprintf("%.5f\n", cfm);
 
             dms1 = dms2;
         end
@@ -89,14 +115,21 @@ function distance = getSimilarityMeasure(alg, dms1, dms2)
         distance = sqrt(mean((dms1 - dms2).^2));
     elseif alg == "dtw"
         distance = dtw(dms1,dms2);
-    elseif alg == "euclidean" || ...
-           alg == "cityblock" || ... 
-           alg == "chebychev" || ...
+    elseif alg == "euclidean" || ...    % same as Minkowski p = 2
+           alg == "cityblock" || ...    % same as Minkowski p = 1
+           alg == "chebychev" || ...    % same as Minkowski p = ∞
            alg == "cosine" || ...
            alg == "correlation" || ...
            alg == "spearman"
         distance = pdist2(dms1',dms2',alg);
     end
+end
+
+function folders = getFolders(folder)
+    f = dir(folder);
+    d = f([f.isdir]);
+    d = arrayfun(@(x) x.name,d,'UniformOutput',false);
+    folders = d(3:end);
 end
 
 function dict = argparser(args, n)
@@ -134,6 +167,9 @@ function dict = argparser(args, n)
         % folder contains data from MOD_6 test:
         "6ipa"   % compute RMSE for pairs of IPA flows.
         "6eth"   % compute RMSE for pairs of ethanol flows.
+
+        % folder contains complete data from MOD_7 test:
+        "7cmp"   % please use folder=C:\...\2_IPA argument with this action
     ];
 
     dict = struct( ...

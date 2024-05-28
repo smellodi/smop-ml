@@ -366,8 +366,8 @@ function distance = getSimilarityMeasure(alg, measrm1, measrm2)
            alg == "cosine" || ...
            alg == "correlation" || ...
            alg == "spearman"
-        m1 = m1'; %reshape(m1',[],3)';
-        m2 = m2'; %reshape(m2',[],3)';
+        m1 = m1';
+        m2 = m2';
         distance = pdist2(m1,m2,alg);
     end
 
