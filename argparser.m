@@ -4,12 +4,12 @@ function dict = argparser(args, n)
         "default"     % computes Euclidean distance between two matrices
 
         % pdist2 implementations
-        "euclidean",
-        "cityblock",
-        "chebychev",
-        "cosine",
-        "correlation",
-        "spearman",
+        "euclidean"
+        "cityblock"
+        "chebychev"
+        "cosine"
+        "correlation"
+        "spearman"
 
         % the rest are not implemented
         "alpha"         % extracts alpha curves or dispersion plots using 
