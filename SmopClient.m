@@ -178,11 +178,13 @@ classdef SmopClient < handle
             distance = 1e5
           end
         
+          [offsets, gains] = obj.getFlowTransformations();
+
           c = length(flows);
           channels(1:c) = struct;
           for i = 1:c
               channels(i).id = obj.config.printer.channels(i).id;
-              channels(i).flow = flows(i);
+              channels(i).flow = offsets(i) + gains(i) * flows(i);
               channels(i).duration = -1;
           end
         
@@ -207,19 +209,27 @@ classdef SmopClient < handle
 
         % Config parameters
 
+        % As of Dec 2024, printer channels have the following fiels:
+        %   minFlow, maxFlow, criticalFlow, pidCheckLevel, 
+        %   shortKnownName, fullKnownName, isKnownOdor
+
         function maxFlow = getMaxFlow(obj, default)
             maxFlow = default;
+            
+            % The previous way is not valid anymore: we want to keep 
+            % individual ranges for each odor, and this info comes
+            % as minFlow and maxFlow of each printer channel
 
-            if ~isstruct(obj.config)
-                return
-            end
-
-            % We pretend that the max flow for all channels is same, so we
-            % take the first channel's max flow value and return it.
-            firstChannel = obj.config.printer.channels(1);
-            if isfield(firstChannel.props, "maxFlow")
-                maxFlow = firstChannel.props.maxFlow;
-            end
+            % if ~isstruct(obj.config)
+            %     return
+            % end
+            % 
+            % % We pretend that the max flow for all channels is same, so we
+            % % take the first channel's max flow value and return it.
+            % firstChannel = obj.config.printer.channels(1);
+            % if isfield(firstChannel.props, "maxFlow")
+            %     maxFlow = firstChannel.props.maxFlow;
+            % end
         end
 
         function channelCount = getChannelCount(obj, minimum)
@@ -291,6 +301,39 @@ classdef SmopClient < handle
             dataBytes = dataBytes(find(dataBytes ~= 0, 1, "first") : end);
           end
           data = native2unicode(dataBytes);
+        end
+
+        % Use it only for the study in Dec 2024 
+        function [offsets, gains] = getFlowTransformations(obj)
+            c = length(obj.config.printer.channels);
+            offsets = zeros();
+            gains = ones();
+
+            for ii = 1:c
+                props = obj.config.printer.channels(ii).props;
+                
+                offsets(ii) = props.minFlow;
+                gains(ii) = (props.maxFlow - props.minFlow) / 50;
+
+                % offset = 0;
+                % gain = 1;
+                
+                % odorName = obj.config.printer.channels(ii).odor;
+                % if odorName == "Cyclohexanone"  % 0 .. 2.8
+                %     gain = 2.8 / 50;
+                % elseif odorName == "Limonene"   % 5 .. 40
+                %     offset = 5;
+                %     gain = 40.0 / 50.0;
+                % elseif odorName == "Citronellol"   % 40 .. 100
+                %     offset = 50;
+                %     gain = 60.0 / 50.0;
+                % end
+
+                % offsets(ii) = offset;
+                % gains(ii) = gain;
+            end
+            offsets
+            gains
         end
     end
 end

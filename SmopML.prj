@@ -1,5 +1,5 @@
 <deployment-project plugin="plugin.ezdeploy" plugin-version="1.0">
-  <configuration build-checksum="2284989593" file="C:\Users\olequ\TUNI.fi\TG-SMELLODI - General\Software\ML\SmopML.prj" location="C:\Users\olequ\TUNI.fi\TG-SMELLODI - General\Software\ML" name="SmopML" preferred-package-location="C:\Users\olequ\TUNI.fi\TG-SMELLODI - General\Software\ML\bin\setup" preferred-package-type="package.type.exe" target="target.ezdeploy.standalone" target-name="Application Compiler">
+  <configuration build-checksum="4194366908" file="C:\Users\olequ\Dev\ProScent\smop-ml\SmopML.prj" location="C:\Users\olequ\Dev\ProScent\smop-ml" name="SmopML" preferred-package-location="C:\Users\olequ\Dev\ProScent\smop-ml\bin\setup" preferred-package-type="package.type.exe" target="target.ezdeploy.standalone" target-name="Application Compiler">
     <param.appname>smop_ml</param.appname>
     <param.icon>${PROJECT_ROOT}\SmopML_resources\icon.ico</param.icon>
     <param.icons>
@@ -83,14 +83,21 @@
       <file>${PROJECT_ROOT}\SmopClient.m</file>
     </fileset.depfun>
     <build-deliverables>
-      <file location="${PROJECT_ROOT}\bin\test" name="readme.txt" optional="true">C:\Users\olequ\TUNI.fi\TG-SMELLODI - General\Software\ML\bin\test\readme.txt</file>
-      <file location="${PROJECT_ROOT}\bin\test" name="smop_ml.exe" optional="false">C:\Users\olequ\TUNI.fi\TG-SMELLODI - General\Software\ML\bin\test\smop_ml.exe</file>
-      <file location="${PROJECT_ROOT}\bin\test" name="splash.png" optional="false">C:\Users\olequ\TUNI.fi\TG-SMELLODI - General\Software\ML\bin\test\splash.png</file>
+      <file location="${PROJECT_ROOT}\bin\test" name="readme.txt" optional="true">C:\Users\olequ\Dev\ProScent\smop-ml\bin\test\readme.txt</file>
+      <file location="${PROJECT_ROOT}\bin\test" name="splash.png" optional="false">C:\Users\olequ\Dev\ProScent\smop-ml\bin\test\splash.png</file>
+      <file location="${PROJECT_ROOT}\bin\test" name="smop_ml.exe" optional="false">C:\Users\olequ\Dev\ProScent\smop-ml\bin\test\smop_ml.exe</file>
     </build-deliverables>
     <workflow />
     <matlab>
-      <root>C:\Program Files\MATLAB\R2023b</root>
-      <toolboxes />
+      <root>C:\Program Files\MATLAB\R2024a</root>
+      <toolboxes>
+        <toolbox name="neuralnetwork" />
+      </toolboxes>
+      <toolbox>
+        <neuralnetwork>
+          <enabled>true</enabled>
+        </neuralnetwork>
+      </toolbox>
     </matlab>
     <platform>
       <unix>false</unix>
