@@ -30,7 +30,7 @@ function main(varargin)
     end
 
     % dbstop error
-    % rng("shuffle")
+    rng("shuffle")
 
     %% STEP 1: Establish a connection to SMOP and get config parameters.
     
